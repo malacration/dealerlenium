@@ -1,0 +1,16 @@
+services:
+  mongoDb:
+    image: mongo:7.0
+    container_name: mongoDb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: dealerlenium
+      MONGO_INITDB_ROOT_PASSWORD: dealerlenium
+      MONGO_INITDB_DATABASE: dealerlenium
+    volumes:
+      - mongoDb_data:/data/db
+
+volumes:
+  mongoDb_data:
