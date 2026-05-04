@@ -41,6 +41,9 @@ data class EmpresaProperties(
 
     fun getCnpjByEmpresa(empresaId: String): String = getEmpresaOrThrow(empresaId).cnpj
 
+    fun getAdiantamentoByEmpresa(empresaId: String): AdiantamentoProperties =
+        getEmpresaOrThrow(empresaId).adiantamento
+
     fun getDescricaoByEmpresaOrNull(empresaId: String): String? {
         return getEmpresa(empresaId)?.descricao?.trim().takeUnless { it.isNullOrEmpty() }
     }
@@ -52,6 +55,7 @@ data class EmpresaConfig(
     val marca: String,
     val chavePix: String? = null,
     val titular: String? = null,
+    val adiantamento: AdiantamentoProperties,
 ) {
     fun toEmpresa(id: String): Empresa {
         return Empresa(
@@ -61,6 +65,7 @@ data class EmpresaConfig(
             marca = marca,
             chavePix = chavePix,
             titular = titular,
+            adiantamento = adiantamento,
         )
     }
 }
@@ -72,6 +77,7 @@ data class Empresa(
     val marca: String,
     val chavePix: String? = null,
     val titular: String? = null,
+    val adiantamento: AdiantamentoProperties,
 )
 
 data class BranchOption(

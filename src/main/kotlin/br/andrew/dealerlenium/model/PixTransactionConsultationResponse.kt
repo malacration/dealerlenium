@@ -8,7 +8,7 @@ data class PixTransactionConsultationResponse(
     val txId: String,
     val tipoTransacao: TipoTransacao? = null,
     val originalAmount: BigDecimal? = null,
-    val paid: Boolean? = null,
+    val paid: Boolean = false,
     val paymentDate: String? = null,
     val paymentType: String? = null,
     val receivedAmount: BigDecimal? = null,

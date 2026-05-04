@@ -25,7 +25,6 @@ data class DealerProperties(
     val tipoTitulo: String,
     val navigation: NavigationProperties = NavigationProperties(),
     val captcha: CaptchaProperties = CaptchaProperties(),
-    val adiantamento: AdiantamentoProperties = AdiantamentoProperties(),
 ) {
 
 }
@@ -60,12 +59,4 @@ data class CaptchaProperties(
     val language: String = "eng",
     val pageSegMode: Int = 8,
     val charWhitelist: String? = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
-)
-
-data class AdiantamentoProperties(
-    val contaGerencialIdentificador: String = "30203",
-    val tipoCodigo: String = "5",
-    val tipoDocumentoCodigo: String = "176",
-    val departamento: String = "ADMINISTRAÇÃO",
-    val tipoFichaRazao: String = "ADIANT DE CLIENTES (PEÇAS)",
 )
