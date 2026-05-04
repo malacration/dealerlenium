@@ -1,8 +1,10 @@
 package br.andrew.dealerlenium
 
 import jakarta.validation.constraints.NotBlank
+import br.andrew.dealerlenium.model.TipoTransacao
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.validation.annotation.Validated
+import java.time.Duration
 
 @Validated
 @ConfigurationProperties(prefix = "dealer")
@@ -25,6 +27,7 @@ data class DealerProperties(
     val tipoTitulo: String,
     val navigation: NavigationProperties = NavigationProperties(),
     val captcha: CaptchaProperties = CaptchaProperties(),
+    val transactionMonitoring: TransactionMonitoringProperties = TransactionMonitoringProperties(),
 ) {
 
 }
@@ -59,4 +62,14 @@ data class CaptchaProperties(
     val language: String = "eng",
     val pageSegMode: Int = 8,
     val charWhitelist: String? = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+)
+
+data class TransactionMonitoringProperties(
+    val enabled: Boolean = true,
+    val pollInterval: Duration = Duration.ofMinutes(1),
+    val defaultCheckInterval: Duration = Duration.ofHours(1),
+    val intervals: Map<TipoTransacao, Duration> = mapOf(
+        TipoTransacao.ADIANTAMENTO to Duration.ofMinutes(5),
+        TipoTransacao.CONTAS_RECEBER to Duration.ofHours(1),
+    ),
 )

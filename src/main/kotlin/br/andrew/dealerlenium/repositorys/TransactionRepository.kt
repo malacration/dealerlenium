@@ -8,6 +8,9 @@ import java.time.Instant
 @Repository
 interface TransactionRepository : MongoRepository<TransactionDocument, String> {
     fun findAllByStatus(status: String): List<TransactionDocument>
+    fun findByEncerradaEmIsNullAndProximaVerificacaoEmLessThanEqualOrderByProximaVerificacaoEmAsc(
+        proximaVerificacaoEm: Instant,
+    ): List<TransactionDocument>
     fun findFirstByTxIdOrderByCreatedAtDesc(txId: String): TransactionDocument?
     fun findFirstByIdLancamentoAndPixExpiraEmAfterOrderByCreatedAtDesc(
         idLancamento: Int,

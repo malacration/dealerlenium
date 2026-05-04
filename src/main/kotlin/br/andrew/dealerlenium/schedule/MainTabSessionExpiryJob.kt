@@ -1,4 +1,4 @@
-package br.andrew.dealerlenium.service
+package br.andrew.dealerlenium.schedule
 
 import br.andrew.dealerlenium.browser.BrowserRuntime
 import org.openqa.selenium.WebDriverException

@@ -48,4 +48,6 @@ bin/
 .vscode/
 
 ### Mac OS ###
-.DS_Store
+application*.yml
+application*.properties
+empresa.yml

@@ -14,6 +14,7 @@ import java.time.Instant
 class PixTransactionHistoryService(
     private val empresaProperties: EmpresaProperties,
     private val transactionRepository: TransactionRepository,
+    private val monitoringPolicy: TransactionMonitoringPolicy,
 ) {
     fun salvarHistoricoPix(
         conta: ContasReceberRegistro,
@@ -31,6 +32,10 @@ class PixTransactionHistoryService(
             cnpjContaRecebimento = empresaConfigurada.cnpj,
             chavePixRecebimento = empresaConfigurada.chavePix,
             nomeTitularContaRecebimento = empresaConfigurada.titular,
+            proximaVerificacaoEm = monitoringPolicy.proximaExecucao(
+                pixPagamentoResponse.tipoTransacao,
+                retornoPix.data.generatedAt?.toInstant() ?: Instant.now(),
+            ),
         )
 
         transactionRepository.save(documento)
@@ -67,6 +72,10 @@ class PixTransactionHistoryService(
             cnpjContaRecebimento = empresaConfigurada.cnpj,
             chavePixRecebimento = empresaConfigurada.chavePix,
             nomeTitularContaRecebimento = empresaConfigurada.titular,
+            proximaVerificacaoEm = monitoringPolicy.proximaExecucao(
+                pixPagamentoResponse.tipoTransacao,
+                retornoPix.data.generatedAt?.toInstant() ?: Instant.now(),
+            ),
         )
 
         return transactionRepository.save(documento)

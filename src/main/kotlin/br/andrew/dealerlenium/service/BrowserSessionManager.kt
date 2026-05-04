@@ -4,6 +4,7 @@ import br.andrew.dealerlenium.DealerProperties
 import br.andrew.dealerlenium.browser.BrowserRuntime
 import br.andrew.dealerlenium.pages.HomePage
 import br.andrew.dealerlenium.pages.LoginPage
+import br.andrew.dealerlenium.schedule.MainTabSessionExpiryJob
 import com.codeborne.selenide.Configuration
 import com.codeborne.selenide.Selenide.open
 import com.codeborne.selenide.SelenideConfig

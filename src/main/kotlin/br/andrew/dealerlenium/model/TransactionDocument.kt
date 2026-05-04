@@ -35,6 +35,12 @@ data class TransactionDocument(
     val chavePixRecebimento: String?,
     val nomeTitularContaRecebimento: String?,
     val createdAt: Instant = Instant.now(),
+    val ultimaVerificacaoEm: Instant? = null,
+    val proximaVerificacaoEm: Instant? = null,
+    val pagamentoConfirmadoEm: Instant? = null,
+    val baixaRealizadaEm: Instant? = null,
+    val encerradaEm: Instant? = null,
+    val ultimaFalhaProcessamento: String? = null,
 ) {
     constructor(
         pixPagamentoResponse: PixPagamentoResponse,
@@ -44,6 +50,7 @@ data class TransactionDocument(
         cnpjContaRecebimento: String,
         chavePixRecebimento: String?,
         nomeTitularContaRecebimento: String?,
+        proximaVerificacaoEm: Instant? = null,
     ) : this(
         id = null,
         idLancamento = pixPagamentoResponse.idLancamento,
@@ -67,6 +74,7 @@ data class TransactionDocument(
         cnpjContaRecebimento = cnpjContaRecebimento,
         chavePixRecebimento = chavePixRecebimento,
         nomeTitularContaRecebimento = nomeTitularContaRecebimento,
+        proximaVerificacaoEm = proximaVerificacaoEm,
     )
 
     fun toPixPagamentoResponse(): PixPagamentoResponse {

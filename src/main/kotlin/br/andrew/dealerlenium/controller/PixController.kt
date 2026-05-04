@@ -4,7 +4,7 @@ import br.andrew.dealerlenium.model.PixPagamentoResponse
 import br.andrew.dealerlenium.model.PixShareVerificationRequest
 import br.andrew.dealerlenium.model.PixTransactionConsultationResponse
 import br.andrew.dealerlenium.repositorys.TransactionRepository
-import br.andrew.dealerlenium.service.AdiantamentoService
+import br.andrew.dealerlenium.service.OpenTransactionSettlementProcessor
 import br.andrew.dealerlenium.service.PessoaService
 import br.andrew.dealerlenium.service.PixPagamentoService
 import jakarta.validation.constraints.NotBlank
@@ -24,7 +24,7 @@ import java.math.BigDecimal
 @RequestMapping("/pix")
 class PixController(
     private val pixPagamentoService: PixPagamentoService,
-    private val adiantamentoService : AdiantamentoService,
+    private val openTransactionSettlementProcessor: OpenTransactionSettlementProcessor,
     private val pessoaService: PessoaService,
     private val repository : TransactionRepository
 ) {
@@ -53,10 +53,11 @@ class PixController(
         @PathVariable id: String
     ): PixTransactionConsultationResponse{
         val transactionDocument = repository.findById(id).orElseThrow { throw Exception("Adiantamento não foi encontrado") }
-        val pagamento = pixPagamentoService.consultarPagamentoDaTransacao(transactionDocument.reference)
-        if(pagamento.paid)
-            adiantamentoService.baixaAdiantamento(transactionDocument,pagamento)
-        return pagamento
+        return if (transactionDocument.encerradaEm != null && transactionDocument.baixaRealizadaEm != null) {
+            pixPagamentoService.consultarPagamentoDaTransacao(id)
+        } else {
+            openTransactionSettlementProcessor.process(id)
+        }
     }
 }
 

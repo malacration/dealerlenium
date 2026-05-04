@@ -31,7 +31,7 @@ data class PixTransactionConsultationResponse(
                 txId = providerStatus.txId ?: transaction.txId,
                 tipoTransacao = transaction.tipoTransacao,
                 originalAmount = providerStatus.originalAmount ?: transaction.valor,
-                paid = providerStatus.resolvedPaid(),
+                paid = providerStatus.resolvedPaid() ?: false,
                 paymentDate = providerStatus.paymentDate?.toInstant()?.toString(),
                 paymentType = providerStatus.paymentType,
                 receivedAmount = providerStatus.receivedAmount,
