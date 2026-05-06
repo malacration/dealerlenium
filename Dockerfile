@@ -15,7 +15,11 @@ FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libtesseract5 liblept5 \
+    && apt-get install -y --no-install-recommends software-properties-common \
+    && add-apt-repository universe \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends tesseract-ocr \
+    && apt-get purge -y --auto-remove software-properties-common \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /workspace/build/libs/*.jar app.jar
