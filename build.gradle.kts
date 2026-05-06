@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "br.andrew"
-version = "1.0-SNAPSHOT"
+version = findProperty("projectVersion")?.toString() ?: "1.0-SNAPSHOT"
 
 repositories {
     mavenCentral()
@@ -14,8 +14,10 @@ repositories {
 
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter")
+    implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-validation")
+    implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
     implementation("org.springframework.boot:spring-boot-starter-data-mongodb")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("com.codeborne:selenide:7.12.0")

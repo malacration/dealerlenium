@@ -106,7 +106,7 @@ class PixPagamentoService(
         }
 
         val vencimento = request.vencimento?.trim().orEmpty()
-        if (vencimento.isNotEmpty() && parseInstant(vencimento).compareTo(transaction.pixExpiraEm) != 0) {
+        if (vencimento.isEmpty() && parseInstant(vencimento).compareTo(transaction.pixExpiraEm) != 0) {
             throw IllegalArgumentException("Os dados do link do pagamento sao invalidos.")
         }
     }

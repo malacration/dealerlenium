@@ -8,6 +8,8 @@ import java.time.Instant
 @Repository
 interface TransactionRepository : MongoRepository<TransactionDocument, String> {
     fun findAllByStatus(status: String): List<TransactionDocument>
+    fun findAllByEmpresaIn(empresas: Collection<String>): List<TransactionDocument>
+    fun findAllByStatusAndEmpresaIn(status: String, empresas: Collection<String>): List<TransactionDocument>
     fun findByEncerradaEmIsNullAndProximaVerificacaoEmLessThanEqualOrderByProximaVerificacaoEmAsc(
         proximaVerificacaoEm: Instant,
     ): List<TransactionDocument>

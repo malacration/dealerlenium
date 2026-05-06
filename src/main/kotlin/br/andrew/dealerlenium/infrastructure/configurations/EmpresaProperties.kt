@@ -9,7 +9,31 @@ data class EmpresaProperties(
     val configuracoes: Map<String, EmpresaConfig> = emptyMap(),
 ) {
     fun getBranches(): List<BranchOption> {
-        return listEmpresas()
+        return toBranchOptions(listEmpresas())
+    }
+
+    fun getBranches(empresaIds: Collection<String>): List<BranchOption> {
+        return toBranchOptions(listEmpresas(empresaIds))
+    }
+
+    fun listEmpresas(empresaIds: Collection<String>): List<Empresa> {
+        val idsPermitidos = empresaIds
+            .map { it.trim().uppercase() }
+            .filter { it.isNotBlank() }
+            .toSet()
+
+        if (idsPermitidos.isEmpty()) {
+            return emptyList()
+        }
+
+        return configuracoes.entries
+            .filter { (id, _) -> id in idsPermitidos }
+            .sortedBy { it.key }
+            .map { (id, empresa) -> empresa.toEmpresa(id) }
+    }
+
+    private fun toBranchOptions(empresas: List<Empresa>): List<BranchOption> {
+        return empresas
             .map { empresa ->
                 BranchOption(
                     id = empresa.id,

@@ -8,12 +8,13 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
-@RequestMapping("/branch")
-class BranchController(
+@RequestMapping("/usuario")
+class UsuarioController(
     private val usuarioEmpresaService: UsuarioEmpresaService,
 ) {
-
-    @GetMapping
-    fun listBranches(authentication: Authentication): List<BranchOption> =
-        usuarioEmpresaService.getEmpresas(authentication)
+    @GetMapping("/empresas")
+    fun getEmpresas(authentication: Authentication): List<BranchOption> {
+        return usuarioEmpresaService.getEmpresas(authentication)
+    }
 }
+
