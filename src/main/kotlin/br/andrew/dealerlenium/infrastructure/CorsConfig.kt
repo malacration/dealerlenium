@@ -3,6 +3,9 @@ package br.andrew.dealerlenium.infrastructure
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.security.config.Customizer
+import org.springframework.security.config.annotation.web.builders.HttpSecurity
+import org.springframework.security.config.annotation.web.configurers.CorsConfigurer
 import org.springframework.web.cors.CorsConfiguration
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 import org.springframework.web.servlet.config.annotation.CorsRegistry
@@ -78,5 +81,21 @@ class CorsConfig(
         configuration.allowCredentials = true
         configuration.maxAge = 3600
         return configuration
+    }
+
+    var customizer : Customizer<CorsConfigurer<HttpSecurity>> = Customizer<CorsConfigurer<HttpSecurity>> {
+        fun customize(httpSecurityCorsConfigurer: CorsConfigurer<HttpSecurity?>) {
+            object : UrlBasedCorsConfigurationSource() {
+                init {
+                    val configuration: CorsConfiguration = getCorsConfig();
+                    this.registerCorsConfiguration("/**", configuration.applyPermitDefaultValues())
+                    this.registerCorsConfiguration("**", configuration)
+                    this.registerCorsConfiguration("*", configuration)
+                    this.registerCorsConfiguration("/*", configuration)
+                    this.registerCorsConfiguration("**/**", configuration)
+                    httpSecurityCorsConfigurer.configurationSource(this)
+                }
+            }
+        }
     }
 }

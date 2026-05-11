@@ -25,6 +25,7 @@ import org.springframework.security.web.SecurityFilterChain
 class SecurityConfig(
     private val keycloakProperties: KeycloakProperties,
     private val keycloakJwtRolesConverter: KeycloakJwtRolesConverter,
+    private val corsConfiguration : CorsConfig
 ) {
     @Bean
     fun securityFilterChain(
@@ -32,7 +33,7 @@ class SecurityConfig(
     ): SecurityFilterChain {
         http
             .csrf { it.disable() }
-            .cors(Customizer.withDefaults())
+            .cors(corsConfiguration.customizer)
             .formLogin { it.disable() }
             .httpBasic { it.disable() }
             .logout { it.disable() }
