@@ -317,29 +317,36 @@ class BrowserSessionManager(
 
     private fun resolveChromeBinaryPath(): String? {
         return listOf(
-            System.getenv("CHROME_BIN"),
+            "/usr/lib/chromium/chromium",
+            "/usr/lib/chromium-browser/chromium-browser",
+            "/opt/google/chrome/chrome",
+            "/usr/bin/google-chrome",
             "/usr/local/bin/chrome",
+            System.getenv("CHROME_BIN"),
             "/usr/bin/chromium",
             "/usr/bin/chromium-browser",
-            "/usr/bin/google-chrome",
-        ).firstNotNullOfOrNull(::existingPathOrNull)
+        ).firstNotNullOfOrNull(::existingExecutablePathOrNull)
     }
 
     private fun resolveChromeDriverPath(): String? {
         return listOf(
-            System.getenv("CHROMEDRIVER_PATH"),
+            "/usr/lib/chromium/chromedriver",
             "/usr/local/bin/chromedriver",
             "/usr/bin/chromedriver",
-        ).firstNotNullOfOrNull(::existingPathOrNull)
+            System.getenv("CHROMEDRIVER_PATH"),
+        ).firstNotNullOfOrNull(::existingExecutablePathOrNull)
     }
 
-    private fun existingPathOrNull(rawPath: String?): String? {
+    private fun existingExecutablePathOrNull(rawPath: String?): String? {
         val path = rawPath?.trim().orEmpty()
         if (path.isBlank()) {
             return null
         }
 
-        return path.takeIf { Path.of(it).exists() }
+        return path.takeIf {
+            val resolvedPath = Path.of(it)
+            resolvedPath.exists() && Files.isRegularFile(resolvedPath) && Files.isExecutable(resolvedPath)
+        }
     }
 
     private fun resolveUserDataDir(driver: WebDriver): Path {

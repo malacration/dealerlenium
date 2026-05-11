@@ -24,8 +24,8 @@ RUN apt-get update \
         libnss3 \
         libxss1 \
         tesseract-ocr \
-    && ln -sf "$(command -v chromium || command -v chromium-browser)" /usr/local/bin/chrome \
-    && ln -sf "$(command -v chromedriver)" /usr/local/bin/chromedriver \
+    && ln -sf "$(if [ -x /usr/lib/chromium/chromium ]; then echo /usr/lib/chromium/chromium; else command -v chromium || command -v chromium-browser; fi)" /usr/local/bin/chrome \
+    && ln -sf "$(if [ -x /usr/lib/chromium/chromedriver ]; then echo /usr/lib/chromium/chromedriver; else command -v chromedriver; fi)" /usr/local/bin/chromedriver \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /workspace/build/libs/*.jar app.jar
