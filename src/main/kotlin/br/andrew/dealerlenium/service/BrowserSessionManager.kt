@@ -100,6 +100,7 @@ class BrowserSessionManager(
 
         discardDeadSessionReference()
         Configuration.headless = dealerProperties.headless
+        Configuration.browserCapabilities = createChromeOptions()
         loginPage.login()
 
         sharedWebDriver = WebDriverRunner.getWebDriver()
@@ -278,15 +279,30 @@ class BrowserSessionManager(
     }
 
     private fun createExperimentalDriver(profileDir: Path): WebDriver {
-        val options = ChromeOptions()
+        val options = createChromeOptions()
         options.addArguments("--user-data-dir=${profileDir.toAbsolutePath()}")
+        return ChromeDriver(options)
+    }
+
+    private fun createChromeOptions(): ChromeOptions {
+        val options = ChromeOptions()
+        options.addArguments("--no-sandbox")
+        options.addArguments("--disable-dev-shm-usage")
+        options.addArguments("--disable-gpu")
+
+        val chromeBinary = System.getenv("CHROME_BIN")?.trim().orEmpty()
+        if (chromeBinary.isNotBlank()) {
+            options.setBinary(chromeBinary)
+        }
+
         if (dealerProperties.headless) {
             options.addArguments("--headless=new")
         }
         if (dealerProperties.fullscreen && !dealerProperties.headless) {
             options.addArguments("--start-maximized")
         }
-        return ChromeDriver(options)
+
+        return options
     }
 
     private fun resolveUserDataDir(driver: WebDriver): Path {

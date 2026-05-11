@@ -10,21 +10,27 @@ COPY tessdata ./tessdata
 
 RUN chmod +x gradlew && ./gradlew bootJar --no-daemon
 
-FROM eclipse-temurin:21-jre-jammy
+FROM eclipse-temurin:21-jre
 
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends software-properties-common \
-    && add-apt-repository universe \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends tesseract-ocr \
-    && apt-get purge -y --auto-remove software-properties-common \
+    && apt-get install -y --no-install-recommends \
+        chromium \
+        chromium-driver \
+        fonts-liberation \
+        libgbm1 \
+        libgtk-3-0 \
+        libnss3 \
+        libxss1 \
+        tesseract-ocr \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /workspace/build/libs/*.jar app.jar
 COPY --from=builder /workspace/tessdata ./tessdata
 
 ENV DEALER_TESSDATA_PATH=/app/tessdata
+ENV CHROME_BIN=/usr/bin/chromium
+ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
 
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
