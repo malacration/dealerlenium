@@ -1,0 +1,41 @@
+services:
+  dealerlenium:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dealerlenium-local
+    depends_on:
+      - mongoDb
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: hmg
+      MONGODB_URI: mongodb://dealerlenium:dealerlenium@mongoDb:27017/dealerlenium?authSource=admin
+      UZZIPIX_BASE_URL: http://host.docker.internal:8552
+      DEALER_HEADLESS: "true"
+      DEALER_FULLSCREEN: "false"
+      DEALER_SESSION_EXPIRY_JOB_ENABLED: "false"
+      DEALER_AUTO_CLOSE_BROWSER: "false"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    shm_size: "2gb"
+    volumes:
+      - ./src/main/resources/application-hmg.yml:/app/config/application-hmg.yml:ro
+      - ./tessdata:/app/tessdata:ro
+    restart: unless-stopped
+
+  mongoDb:
+    image: mongo:7.0
+    container_name: mongoDb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: dealerlenium
+      MONGO_INITDB_ROOT_PASSWORD: dealerlenium
+      MONGO_INITDB_DATABASE: dealerlenium
+    volumes:
+      - mongoDb_data:/data/db
+
+volumes:
+  mongoDb_data:

@@ -317,11 +317,11 @@ class BrowserSessionManager(
 
     private fun resolveChromeBinaryPath(): String? {
         return listOf(
+            "/usr/bin/google-chrome",
+            "/opt/google/chrome/chrome",
+            "/usr/local/bin/chrome",
             "/usr/lib/chromium/chromium",
             "/usr/lib/chromium-browser/chromium-browser",
-            "/opt/google/chrome/chrome",
-            "/usr/bin/google-chrome",
-            "/usr/local/bin/chrome",
             System.getenv("CHROME_BIN"),
             "/usr/bin/chromium",
             "/usr/bin/chromium-browser",
