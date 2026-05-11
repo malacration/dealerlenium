@@ -24,13 +24,15 @@ RUN apt-get update \
         libnss3 \
         libxss1 \
         tesseract-ocr \
+    && ln -sf "$(command -v chromium || command -v chromium-browser)" /usr/local/bin/chrome \
+    && ln -sf "$(command -v chromedriver)" /usr/local/bin/chromedriver \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /workspace/build/libs/*.jar app.jar
 COPY --from=builder /workspace/tessdata ./tessdata
 
 ENV DEALER_TESSDATA_PATH=/app/tessdata
-ENV CHROME_BIN=/usr/bin/chromium
-ENV CHROMEDRIVER_PATH=/usr/bin/chromedriver
+ENV CHROME_BIN=/usr/local/bin/chrome
+ENV CHROMEDRIVER_PATH=/usr/local/bin/chromedriver
 
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

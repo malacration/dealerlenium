@@ -31,6 +31,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import kotlin.io.path.deleteIfExists
+import kotlin.io.path.exists
 
 @Service
 class BrowserSessionManager(
@@ -99,6 +100,7 @@ class BrowserSessionManager(
         }
 
         discardDeadSessionReference()
+        configureChromeRuntime()
         Configuration.headless = dealerProperties.headless
         Configuration.browserCapabilities = createChromeOptions()
         loginPage.login()
@@ -290,9 +292,11 @@ class BrowserSessionManager(
         options.addArguments("--disable-dev-shm-usage")
         options.addArguments("--disable-gpu")
 
-        val chromeBinary = System.getenv("CHROME_BIN")?.trim().orEmpty()
-        if (chromeBinary.isNotBlank()) {
-            options.setBinary(chromeBinary)
+        resolveChromeBinaryPath()?.let(options::setBinary)
+
+        val chromeDriverPath = resolveChromeDriverPath()
+        if (chromeDriverPath != null) {
+            System.setProperty("webdriver.chrome.driver", chromeDriverPath)
         }
 
         if (dealerProperties.headless) {
@@ -303,6 +307,39 @@ class BrowserSessionManager(
         }
 
         return options
+    }
+
+    private fun configureChromeRuntime() {
+        resolveChromeDriverPath()?.let {
+            System.setProperty("webdriver.chrome.driver", it)
+        }
+    }
+
+    private fun resolveChromeBinaryPath(): String? {
+        return listOf(
+            System.getenv("CHROME_BIN"),
+            "/usr/local/bin/chrome",
+            "/usr/bin/chromium",
+            "/usr/bin/chromium-browser",
+            "/usr/bin/google-chrome",
+        ).firstNotNullOfOrNull(::existingPathOrNull)
+    }
+
+    private fun resolveChromeDriverPath(): String? {
+        return listOf(
+            System.getenv("CHROMEDRIVER_PATH"),
+            "/usr/local/bin/chromedriver",
+            "/usr/bin/chromedriver",
+        ).firstNotNullOfOrNull(::existingPathOrNull)
+    }
+
+    private fun existingPathOrNull(rawPath: String?): String? {
+        val path = rawPath?.trim().orEmpty()
+        if (path.isBlank()) {
+            return null
+        }
+
+        return path.takeIf { Path.of(it).exists() }
     }
 
     private fun resolveUserDataDir(driver: WebDriver): Path {
