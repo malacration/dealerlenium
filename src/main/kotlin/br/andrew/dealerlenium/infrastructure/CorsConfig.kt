@@ -83,19 +83,7 @@ class CorsConfig(
         return configuration
     }
 
-    var customizer : Customizer<CorsConfigurer<HttpSecurity>> = Customizer<CorsConfigurer<HttpSecurity>> {
-        fun customize(httpSecurityCorsConfigurer: CorsConfigurer<HttpSecurity?>) {
-            object : UrlBasedCorsConfigurationSource() {
-                init {
-                    val configuration: CorsConfiguration = getCorsConfig();
-                    this.registerCorsConfiguration("/**", configuration.applyPermitDefaultValues())
-                    this.registerCorsConfiguration("**", configuration)
-                    this.registerCorsConfiguration("*", configuration)
-                    this.registerCorsConfiguration("/*", configuration)
-                    this.registerCorsConfiguration("**/**", configuration)
-                    httpSecurityCorsConfigurer.configurationSource(this)
-                }
-            }
-        }
+    var customizer: Customizer<CorsConfigurer<HttpSecurity>> = Customizer { cors ->
+        cors.configurationSource(corsConfigurationSource())
     }
 }

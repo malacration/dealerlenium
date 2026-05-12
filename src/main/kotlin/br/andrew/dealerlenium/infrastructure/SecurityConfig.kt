@@ -31,9 +31,7 @@ class SecurityConfig(
     fun securityFilterChain(
         http: HttpSecurity,
     ): SecurityFilterChain {
-        http
-            .csrf { it.disable() }
-            .cors(corsConfiguration.customizer)
+        return http
             .formLogin { it.disable() }
             .httpBasic { it.disable() }
             .logout { it.disable() }
@@ -50,8 +48,9 @@ class SecurityConfig(
                     jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())
                 }
             }
-
-        return http.build()
+            .csrf { it.disable() }
+            .cors(corsConfiguration.customizer)
+            .build()
     }
 
     @Bean
