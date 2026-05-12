@@ -1,6 +1,7 @@
 package br.andrew.dealerlenium.infrastructure
 
-import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.context.properties.ConfigurationProperties
+import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.security.config.Customizer
@@ -11,19 +12,20 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 import org.springframework.web.servlet.config.annotation.CorsRegistry
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
 
-@Configuration
-class CorsConfig(
-    @Value("\${cors.origins:http://localhost:4200}")
-    private val corsAppendAllow: List<String> = emptyList(),
-) {
+@ConfigurationProperties(prefix = "cors")
+data class CorsProperties(val origins: List<String> = emptyList())
 
-    private val allowedOriginPatterns = mutableListOf(
+@Configuration
+@EnableConfigurationProperties(CorsProperties::class)
+class CorsConfig(private val corsProperties: CorsProperties) {
+
+    private val allowedOriginPatterns: List<String> get() = mutableListOf(
         "http://localhost:[*]",
         "http://localhost:4200",
         "http://*.localhost:[*]",
         "http://172.18.30.147:4200",
     ).also {
-        it.addAll(corsAppendAllow.filter { origin -> origin.isNotBlank() })
+        it.addAll(corsProperties.origins.filter { origin -> origin.isNotBlank() })
     }
 
     private val allowedMethods = listOf("HEAD", "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
