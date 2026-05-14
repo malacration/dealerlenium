@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.math.BigDecimal
+import java.time.Instant
 
 @Validated
 @RestController
@@ -47,14 +48,13 @@ class PixController(
         @RequestBody request: PixShareVerificationRequest,
     ): PixTransactionConsultationResponse = pixPagamentoService.verificarPixCompartilhado(request)
 
-
     @GetMapping("/transaction/{id}")
     fun getTransaction(
         @PathVariable id: String
     ): PixTransactionConsultationResponse{
         val transactionDocument = repository.findById(id).orElseThrow { throw Exception("Adiantamento não foi encontrado") }
         return if (transactionDocument.encerradaEm != null && transactionDocument.baixaRealizadaEm != null) {
-            pixPagamentoService.consultarPagamentoDaTransacao(id)
+            pixPagamentoService.consultarPagamentoDaTransacao(transactionDocument)
         } else {
             openTransactionSettlementProcessor.process(id)
         }
@@ -67,4 +67,8 @@ data class PixClienteAdvanceRequest(
     @field:NotBlank
     val branchId: String,
     val valor: BigDecimal?,
+    @field:Positive
+    val departamentoCod: Int? = null,
+    @field:Positive
+    val tipoFichaRazaoCod: Int? = null,
 )

@@ -4,6 +4,7 @@ import br.andrew.dealerlenium.model.Cliente
 import br.andrew.dealerlenium.infrastructure.configurations.EmpresaProperties
 import br.andrew.dealerlenium.model.PixPagamentoResponse
 import br.andrew.dealerlenium.model.TransactionDocument
+import br.andrew.dealerlenium.model.TransactionParameters
 import br.andrew.dealerlenium.model.TipoTransacao
 import br.andrew.dealerlenium.pages.ContasReceberRegistro
 import br.andrew.dealerlenium.repositorys.TransactionRepository
@@ -46,6 +47,7 @@ class PixTransactionHistoryService(
         cliente: Cliente,
         pixPagamentoResponse: PixPagamentoResponse,
         retornoPix: DataRetonroPixQrCode,
+        parametros: TransactionParameters? = null,
     ): TransactionDocument {
         val empresaConfigurada = empresaProperties.getEmpresaOrThrow(empresa)
 
@@ -63,6 +65,7 @@ class PixTransactionHistoryService(
             status = "Criado",
             statusTituloRef = "",
             descricao = pixPagamentoResponse.descricao,
+            parametros = parametros,
             numeroParcela = null,
             vencimentoTitulo = null,
             pixGeradoEm = retornoPix.data.generatedAt?.toInstant() ?: Instant.now(),

@@ -6,6 +6,7 @@ import br.andrew.dealerlenium.model.TransactionDocument
 import br.andrew.dealerlenium.repositorys.TransactionRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import java.math.BigDecimal
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneOffset

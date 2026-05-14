@@ -49,13 +49,28 @@ class AdiantamentoService(
                 .shouldBe(visible)
                 .selectOptionByValue(adiantamento.tipoDocumentoCodigo)
             lancamentoPage.waitAjaxLoadingToFinish()
-            BrowserRuntime.css("#CTLTESOURARIA_DEPARTAMENTOCOD")
-                .shouldBe(visible)
-                .selectOption(adiantamento.departamento)
+            val parametros = transaction.parametros
+            val departamentoCod = parametros?.departamentoCod
+            if (departamentoCod != null) {
+                BrowserRuntime.css("#CTLTESOURARIA_DEPARTAMENTOCOD")
+                    .shouldBe(visible)
+                    .selectOptionByValue(departamentoCod.toString())
+            } else {
+                BrowserRuntime.css("#CTLTESOURARIA_DEPARTAMENTOCOD")
+                    .shouldBe(visible)
+                    .selectOption(adiantamento.departamento)
+            }
             lancamentoPage.waitAjaxLoadingToFinish()
-            BrowserRuntime.css("#vTESOURARIA_TIPOFICHARAZAOCOD")
-                .shouldBe(visible)
-                .selectOption(adiantamento.tipoFichaRazao)
+            val tipoFichaRazaoCod = parametros?.tipoFichaRazaoCod
+            if (tipoFichaRazaoCod != null) {
+                BrowserRuntime.css("#vTESOURARIA_TIPOFICHARAZAOCOD")
+                    .shouldBe(visible)
+                    .selectOptionByValue(tipoFichaRazaoCod.toString())
+            } else {
+                BrowserRuntime.css("#vTESOURARIA_TIPOFICHARAZAOCOD")
+                    .shouldBe(visible)
+                    .selectOption(adiantamento.tipoFichaRazao)
+            }
             AspxInputHelper.setDate("#vTESOURARIA_DATACAIXA", dataLancamento)
             AspxInputHelper.setDate("#vTESOURARIA_DATAMOVIMENTO", dataLancamento)
             BrowserRuntime.css("#vPESSOA_CODIGO")

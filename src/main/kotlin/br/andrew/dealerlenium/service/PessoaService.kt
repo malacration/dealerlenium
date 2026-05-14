@@ -5,6 +5,7 @@ import br.andrew.dealerlenium.controller.PixClienteAdvanceRequest
 import br.andrew.dealerlenium.infrastructure.configurations.EmpresaProperties
 import br.andrew.dealerlenium.model.Cliente
 import br.andrew.dealerlenium.model.PixPagamentoResponse
+import br.andrew.dealerlenium.model.TransactionParameters
 import br.andrew.dealerlenium.model.TipoTransacao
 import br.andrew.dealerlenium.pages.SelenideElementHelper
 import com.codeborne.selenide.Condition.visible
@@ -82,6 +83,13 @@ class PessoaService(
             cliente = cliente,
             pixPagamentoResponse = pixPagamentoResponse,
             retornoPix = retorno,
+            parametros = TransactionParameters(
+                idCliente = request.idCliente,
+                branchId = request.branchId,
+                valor = valor,
+                departamentoCod = request.departamentoCod,
+                tipoFichaRazaoCod = request.tipoFichaRazaoCod,
+            ),
         )
 
         return pixPagamentoResponse.also {

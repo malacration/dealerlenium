@@ -25,6 +25,7 @@ data class TransactionDocument(
     @Field("statusTitulo")
     val statusTituloRef: String = "",
     val descricao: String,
+    val parametros: TransactionParameters? = null,
     val numeroParcela: String?,
     val vencimentoTitulo: String?,
     val pixGeradoEm: Instant,
@@ -65,6 +66,7 @@ data class TransactionDocument(
         status = "Criado",
         statusTituloRef = pixPagamentoResponse.status,
         descricao = pixPagamentoResponse.descricao,
+        parametros = null,
         numeroParcela = conta.numeroParcela,
         vencimentoTitulo = conta.vencimento,
         pixGeradoEm = pixGeradoEm ?: Instant.now(),

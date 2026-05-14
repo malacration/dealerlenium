@@ -4,6 +4,7 @@ import br.andrew.dealerlenium.infrastructure.configurations.EmpresaProperties
 import br.andrew.dealerlenium.model.PixPagamentoResponse
 import br.andrew.dealerlenium.model.PixShareVerificationRequest
 import br.andrew.dealerlenium.model.PixTransactionConsultationResponse
+import br.andrew.dealerlenium.model.TransactionDocument
 import br.andrew.dealerlenium.model.TipoTransacao
 import br.andrew.dealerlenium.pages.ContasReceberRegistro
 import br.andrew.dealerlenium.repositorys.TransactionRepository
@@ -79,6 +80,10 @@ class PixPagamentoService(
         val transaction = transactionRepository.findById(id).orElseThrow {
             IllegalArgumentException("Erro ao recuperar $id")
         }
+        return consultarPagamentoDaTransacao(transaction)
+    }
+
+    fun consultarPagamentoDaTransacao(transaction: TransactionDocument): PixTransactionConsultationResponse {
         val providerStatus = uzziPixService.verifica(transaction.empresa, transaction.reference)
 
         return PixTransactionConsultationResponse.from(transaction, providerStatus, resolveNomeFavorecido(transaction))
