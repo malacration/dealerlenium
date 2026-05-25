@@ -1,6 +1,7 @@
 package br.andrew.dealerlenium.service
 
 import br.andrew.dealerlenium.DealerProperties
+import br.andrew.dealerlenium.browser.BrowserDebugArtifacts
 import br.andrew.dealerlenium.browser.BrowserRuntime
 import br.andrew.dealerlenium.pages.HomePage
 import br.andrew.dealerlenium.pages.LoginPage
@@ -224,6 +225,11 @@ class BrowserSessionManager(
                 clonedSelenideDriver.open(snapshot.currentUrl)
                 action(homePage)
             }
+        } catch (error: Throwable) {
+            BrowserRuntime.withDriver(clonedSelenideDriver) {
+                BrowserDebugArtifacts.captureCurrentContext("cloned-session-failure")
+            }
+            throw error
         } finally {
             try {
                 clonedSelenideDriver.close()

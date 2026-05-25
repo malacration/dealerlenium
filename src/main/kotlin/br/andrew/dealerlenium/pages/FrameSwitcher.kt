@@ -1,5 +1,6 @@
 package br.andrew.dealerlenium.pages
 
+import br.andrew.dealerlenium.browser.BrowserDebugArtifacts
 import br.andrew.dealerlenium.browser.BrowserRuntime
 import org.openqa.selenium.By
 import org.openqa.selenium.NoSuchFrameException
@@ -25,6 +26,16 @@ class FrameSwitcher {
         timeoutSeconds: Long = 15,
         fromRoot: Boolean = false,
     ) {
+        if (!trySwitchToFrameBySrc(srcContains, timeoutSeconds, fromRoot)) {
+            error("Nao foi encontrado iframe/frame com src contendo: $srcContains")
+        }
+    }
+
+    fun trySwitchToFrameBySrc(
+        srcContains: String,
+        timeoutSeconds: Long = 15,
+        fromRoot: Boolean = false,
+    ): Boolean {
         if (fromRoot) {
             BrowserRuntime.switchTo().defaultContent()
         }
@@ -35,8 +46,10 @@ class FrameSwitcher {
             wait.until(
                 ExpectedConditions.frameToBeAvailableAndSwitchToIt(By.cssSelector(frameSelector)),
             )
+            return true
         } catch (_: TimeoutException) {
-            error("Nao foi encontrado iframe/frame com src contendo: $srcContains")
+            BrowserDebugArtifacts.captureCurrentContext("switch-frame-$srcContains")
+            return false
         }
     }
 
@@ -50,6 +63,7 @@ class FrameSwitcher {
                 true
             }
         } catch (_: TimeoutException) {
+            BrowserDebugArtifacts.captureCurrentContext("switch-parent-frame")
             error("Nao foi possivel trocar para o iframe superior dentro de ${timeoutSeconds}s")
         }
     }

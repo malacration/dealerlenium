@@ -9,7 +9,9 @@ import br.andrew.dealerlenium.pages.AuthenticatedPage
 import br.andrew.dealerlenium.pages.FrameSwitcher
 import br.andrew.dealerlenium.pages.NavigationPage
 import com.codeborne.selenide.Condition.visible
+import com.codeborne.selenide.Condition.disappear
 import org.openqa.selenium.By
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.ZoneId
 
@@ -20,6 +22,8 @@ class AdiantamentoService(
     private val empresaProperties: EmpresaProperties,
     private val frameSwitcher: FrameSwitcher,
 ) {
+    private val logger = LoggerFactory.getLogger(javaClass)
+
     fun baixaAdiantamento(transaction: TransactionDocument, pagamento: PixTransactionConsultationResponse): Int? {
         return browserSessionManager.runInClonedStateDriver { session ->
             val empresa = empresaProperties.getEmpresaOrThrow(transaction.empresa)
@@ -99,24 +103,88 @@ class AdiantamentoService(
         var numero : Int? = null
         frameSwitcher.afterCloseCurrentFrameSwitchToParent({
             BrowserRuntime.css("#BTNCONFIRMAR").shouldBe(visible).click()
-            session.waitAjaxLoadingToFinish()
-            val alerta = BrowserRuntime.getWebDriver()
-                .findElements(By.cssSelector("#DVELOP_CONFIRMPANELContainer .Body"))
-                .firstOrNull()
-                ?.text
-                ?.trim()
-            if (!alerta.isNullOrEmpty()) {
-                throw Exception("Erro ao realizar baixa no ERP! Mensagem: ${alerta}")
-            }
-
-            val reciboText = BrowserRuntime.getWebDriver().findElements(By.cssSelector("#gxErrorViewer div")).joinToString { it.text }
-            numero = Regex("\\d+")
-                .find(reciboText)
-                ?.value
-                ?.toInt()
-
+            numero = capturarResultadoDaBaixa(session)
         })
         return numero
+    }
+
+    private fun capturarResultadoDaBaixa(session: AuthenticatedPage): Int? {
+        val reciboAberto = frameSwitcher.trySwitchToFrameBySrc("wp_reciboemite.aspx", timeoutSeconds = 10)
+        if (!reciboAberto) {
+            val erroAplicacao = resolveApplicationErrorMessage()
+            if (!erroAplicacao.isNullOrBlank()) {
+                throw Exception("Erro ao realizar baixa no ERP! Mensagem: $erroAplicacao")
+            }
+
+            session.waitAjaxLoadingToFinish()
+            val erroAposAjax = resolveApplicationErrorMessage()
+            if (!erroAposAjax.isNullOrBlank()) {
+                throw Exception("Erro ao realizar baixa no ERP! Mensagem: $erroAposAjax")
+            }
+
+            throw Exception("Erro ao realizar baixa no ERP! O popup do recibo nao foi aberto.")
+        }
+
+        val numeroRecibo = extractReceiptId()
+        frameSwitcher.switchToParentFrameWhenReady()
+        closeReceiptPopup()
+        return numeroRecibo
+    }
+
+    private fun extractReceiptId(): Int? {
+        val reciboText = currentGxErrorViewerText()
+            .ifBlank { parentGxErrorViewerText() }
+
+        return Regex("\\d+")
+            .find(reciboText)
+            ?.value
+            ?.toInt()
+            ?.also { receiptId ->
+                logger.info("ID do recibo capturado: {}", receiptId)
+            }
+    }
+
+    private fun resolveApplicationErrorMessage(): String? {
+        val confirmPanelText = BrowserRuntime.getWebDriver()
+            .findElements(By.cssSelector("#DVELOP_CONFIRMPANELContainer .Body"))
+            .mapNotNull { it.text?.trim() }
+            .firstOrNull { it.isNotBlank() }
+        if (!confirmPanelText.isNullOrBlank()) {
+            return confirmPanelText
+        }
+
+        val gxErrorViewerText = currentGxErrorViewerText()
+        if (gxErrorViewerText.isBlank()) {
+            return null
+        }
+
+        return gxErrorViewerText.takeUnless { it.contains("Gravado com Sucesso", ignoreCase = true) }
+    }
+
+    private fun currentGxErrorViewerText(): String {
+        return BrowserRuntime.getWebDriver()
+            .findElements(By.cssSelector("#gxErrorViewer div"))
+            .joinToString(" | ") { it.text.trim() }
+            .trim()
+    }
+
+    private fun parentGxErrorViewerText(): String {
+        return runCatching {
+            frameSwitcher.switchToParentFrameWhenReady()
+            currentGxErrorViewerText()
+        }.getOrDefault("").also {
+            runCatching {
+                frameSwitcher.trySwitchToFrameBySrc("wp_reciboemite.aspx", timeoutSeconds = 2)
+            }
+        }
+    }
+
+    private fun closeReceiptPopup() {
+        val closeButton = BrowserRuntime.css("#gxp0_cls")
+        if (closeButton.exists()) {
+            closeButton.shouldBe(visible).click()
+            BrowserRuntime.css("#gxp0_b").should(disappear)
+        }
     }
 
     private fun buildObservacao(transaction: TransactionDocument): String {

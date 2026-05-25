@@ -1,5 +1,6 @@
 package br.andrew.dealerlenium.pages
 
+import br.andrew.dealerlenium.browser.BrowserDebugArtifacts
 import br.andrew.dealerlenium.browser.BrowserRuntime
 import br.andrew.dealerlenium.infrastructure.configurations.Empresa
 import com.codeborne.selenide.Condition.visible
@@ -36,7 +37,12 @@ interface AuthenticatedPage {
             appeared = isAjaxNotificationVisible()
         }
         if (appeared) {
-            BrowserRuntime.css("#gx_ajax_notification").shouldBe(hidden, Duration.ofSeconds(timeoutSeconds))
+            try {
+                BrowserRuntime.css("#gx_ajax_notification").shouldBe(hidden, Duration.ofSeconds(timeoutSeconds))
+            } catch (error: Throwable) {
+                BrowserDebugArtifacts.captureCurrentContext("ajax-timeout")
+                throw error
+            }
         }
         return this
     }
