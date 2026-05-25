@@ -8,5 +8,4 @@ data class Cliente(
     val municipio: String?,
     val uf: String?,
     val ativo: Boolean,
-    val codigoMontadora: String?,
 )

@@ -3,6 +3,7 @@ package br.andrew.dealerlenium.service
 import br.andrew.dealerlenium.handdle.TransactionSettlementDispatcher
 import br.andrew.dealerlenium.model.PixTransactionConsultationResponse
 import br.andrew.dealerlenium.model.TransactionDocument
+import br.andrew.dealerlenium.model.TransactionStatus
 import br.andrew.dealerlenium.repositorys.TransactionRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -41,12 +42,11 @@ class OpenTransactionSettlementProcessor(
         val transaction = transactionRepository.findById(transactionId).orElseThrow {
             IllegalArgumentException("Transacao $transactionId nao encontrada")
         }
+        if (transaction.status != TransactionStatus.CRIADO) {
+            return pixPagamentoService.consultarPagamentoDaTransacao(transaction)
+        }
         val agora = Instant.now()
         val pagamento = pixPagamentoService.consultarPagamentoDaTransacao(transactionId)
-
-        if (transaction.baixaRealizadaEm != null) {
-            return pagamento
-        }
 
         return if (pagamento.paid) {
             processarPagamentoConfirmado(transaction, pagamento, agora)
@@ -61,13 +61,14 @@ class OpenTransactionSettlementProcessor(
         agora: Instant,
     ): PixTransactionConsultationResponse {
         return runCatching {
-            settlementDispatcher.baixa(transaction, pagamento)
+            val settlementResult = settlementDispatcher.baixa(transaction, pagamento)
             transactionRepository.save(
                 transaction.copy(
-                    status = pagamento.status ?: "Pago",
+                    status = TransactionStatus.PAGO,
                     ultimaVerificacaoEm = agora,
                     pagamentoConfirmadoEm = parsePaymentDate(pagamento.paymentDate) ?: agora,
                     baixaRealizadaEm = agora,
+                    idBaixa = settlementResult.settlementId,
                     encerradaEm = agora,
                     proximaVerificacaoEm = null,
                     ultimaFalhaProcessamento = null,
@@ -78,11 +79,13 @@ class OpenTransactionSettlementProcessor(
             logger.error("Falha ao realizar baixa da transacao {}", transaction.id ?: transaction.txId, error)
             transactionRepository.save(
                 transaction.copy(
-                    status = pagamento.status ?: "Pago",
+                    status = TransactionStatus.ERRO_BAIXA,
                     ultimaVerificacaoEm = agora,
                     pagamentoConfirmadoEm = parsePaymentDate(pagamento.paymentDate) ?: agora,
-                    proximaVerificacaoEm = monitoringPolicy.proximaExecucao(transaction.tipoTransacao, agora),
-                    ultimaFalhaProcessamento = error.message ?: error::class.simpleName,
+                    baixaRealizadaEm = null,
+                    proximaVerificacaoEm = null,
+                    encerradaEm = agora,
+                    ultimaFalhaProcessamento = resolveFailureMessage(error),
                 ),
             )
             throw error
@@ -98,7 +101,7 @@ class OpenTransactionSettlementProcessor(
 
         transactionRepository.save(
             transaction.copy(
-                status = pagamento.status ?: if (expirado) "Expirado" else transaction.status,
+                status = if (expirado) TransactionStatus.EXPIRADO else transaction.status,
                 ultimaVerificacaoEm = agora,
                 proximaVerificacaoEm = if (expirado) null else monitoringPolicy.proximaExecucao(transaction.tipoTransacao, agora),
                 encerradaEm = if (expirado) agora else null,
@@ -118,5 +121,14 @@ class OpenTransactionSettlementProcessor(
             .recoverCatching { OffsetDateTime.parse(value).toInstant() }
             .recoverCatching { OffsetDateTime.parse(value).withOffsetSameInstant(ZoneOffset.UTC).toInstant() }
             .getOrNull()
+    }
+
+    private fun resolveFailureMessage(error: Throwable): String {
+        val message = error.message?.trim().orEmpty()
+        return if (message.isNotEmpty()) {
+            message
+        } else {
+            error::class.simpleName ?: "Falha desconhecida ao realizar baixa"
+        }
     }
 }

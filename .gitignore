@@ -50,4 +50,5 @@ bin/
 ### Mac OS ###
 application*.yml
 application*.properties
-empresa.yml
+empresa*.yml
+src/test/resources/application-dealer-adiantamento-pipeline.yml

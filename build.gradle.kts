@@ -30,6 +30,15 @@ tasks.test {
     useJUnitPlatform()
 }
 
+tasks.register<Test>("dealerAdiantamentoPipelineTest") {
+    description = "Executa o teste de pipeline da baixa de adiantamento usando o Dealer real."
+    group = "verification"
+    useJUnitPlatform {
+        includeTags("dealer-adiantamento-pipeline")
+    }
+    shouldRunAfter(tasks.test)
+}
+
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
     compilerOptions {
         freeCompilerArgs.add("-Xjsr305=strict")

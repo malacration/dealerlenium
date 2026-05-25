@@ -1,6 +1,7 @@
 package br.andrew.dealerlenium.controller
 
 import br.andrew.dealerlenium.model.TransactionDocument
+import br.andrew.dealerlenium.model.TransactionStatus
 import br.andrew.dealerlenium.repositorys.TransactionRepository
 import br.andrew.dealerlenium.service.UsuarioEmpresaService
 import org.springframework.http.HttpStatus
@@ -48,8 +49,9 @@ class TransactionController(
         @PathVariable status: String,
         authentication: Authentication,
     ): List<TransactionDocument> {
+        val transactionStatus = TransactionStatus.from(status)
         return transactionRepository.findAllByStatusAndEmpresaIn(
-            status,
+            transactionStatus.value,
             usuarioEmpresaService.getEmpresaIds(authentication),
         )
     }

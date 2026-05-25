@@ -21,7 +21,7 @@ data class TransactionDocument(
     val clienteNome: String,
     val clienteCodigo: String?,
     val valor: BigDecimal,
-    val status: String = "Criado",
+    val status: TransactionStatus = TransactionStatus.CRIADO,
     @Field("statusTitulo")
     val statusTituloRef: String = "",
     val descricao: String,
@@ -40,6 +40,7 @@ data class TransactionDocument(
     val proximaVerificacaoEm: Instant? = null,
     val pagamentoConfirmadoEm: Instant? = null,
     val baixaRealizadaEm: Instant? = null,
+    val idBaixa: Int? = null,
     val encerradaEm: Instant? = null,
     val ultimaFalhaProcessamento: String? = null,
 ) {
@@ -63,7 +64,7 @@ data class TransactionDocument(
         clienteNome = pixPagamentoResponse.nomeRecebedor,
         clienteCodigo = conta.pessoaCod,
         valor = pixPagamentoResponse.valor,
-        status = "Criado",
+        status = TransactionStatus.CRIADO,
         statusTituloRef = pixPagamentoResponse.status,
         descricao = pixPagamentoResponse.descricao,
         parametros = null,

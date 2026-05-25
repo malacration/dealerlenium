@@ -27,6 +27,10 @@ data class PixTransactionConsultationResponse(
             providerStatus: UzziPixTransactionStatus,
             nomeFavorecido: String?,
         ): PixTransactionConsultationResponse {
+            val resolvedStatus = when (transaction.status) {
+                TransactionStatus.CRIADO -> providerStatus.status ?: transaction.status.value
+                else -> transaction.status.value
+            }
             return PixTransactionConsultationResponse(
                 txId = providerStatus.txId ?: transaction.txId,
                 tipoTransacao = transaction.tipoTransacao,
@@ -35,7 +39,7 @@ data class PixTransactionConsultationResponse(
                 paymentDate = providerStatus.paymentDate?.toInstant()?.toString(),
                 paymentType = providerStatus.paymentType,
                 receivedAmount = providerStatus.receivedAmount,
-                status = providerStatus.status ?: transaction.status,
+                status = resolvedStatus,
                 valor = transaction.valor,
                 descricao = transaction.descricao,
                 nomeRecebedor = transaction.clienteNome,

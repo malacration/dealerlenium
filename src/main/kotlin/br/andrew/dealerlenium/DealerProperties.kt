@@ -14,6 +14,7 @@ data class DealerProperties(
     @field:NotBlank val username: String,
     @field:NotBlank val password: String,
     val headless: Boolean = true,
+    val startupLoginEnabled: Boolean = true,
     val sessionExpiryJobEnabled: Boolean = true,
     val autoCloseBrowser: Boolean = true,
     val fullscreen: Boolean = false,

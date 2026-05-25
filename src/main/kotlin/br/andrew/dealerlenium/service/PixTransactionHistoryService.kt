@@ -5,6 +5,7 @@ import br.andrew.dealerlenium.infrastructure.configurations.EmpresaProperties
 import br.andrew.dealerlenium.model.PixPagamentoResponse
 import br.andrew.dealerlenium.model.TransactionDocument
 import br.andrew.dealerlenium.model.TransactionParameters
+import br.andrew.dealerlenium.model.TransactionStatus
 import br.andrew.dealerlenium.model.TipoTransacao
 import br.andrew.dealerlenium.pages.ContasReceberRegistro
 import br.andrew.dealerlenium.repositorys.TransactionRepository
@@ -62,7 +63,7 @@ class PixTransactionHistoryService(
             clienteNome = cliente.nome ?: cliente.nomeFantasia ?: "Cliente ${cliente.codigo}",
             clienteCodigo = cliente.codigo.toString(),
             valor = pixPagamentoResponse.valor,
-            status = "Criado",
+            status = TransactionStatus.CRIADO,
             statusTituloRef = "",
             descricao = pixPagamentoResponse.descricao,
             parametros = parametros,

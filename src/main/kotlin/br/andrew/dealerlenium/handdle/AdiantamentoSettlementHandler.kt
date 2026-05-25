@@ -1,5 +1,6 @@
 package br.andrew.dealerlenium.handdle
 
+import br.andrew.dealerlenium.handdle.TransactionSettlementResult
 import br.andrew.dealerlenium.model.PixTransactionConsultationResponse
 import br.andrew.dealerlenium.model.TipoTransacao
 import br.andrew.dealerlenium.model.TransactionDocument
@@ -12,7 +13,9 @@ class AdiantamentoSettlementHandler(
 ) : TransactionSettlementHandler {
     override fun supports(tipoTransacao: TipoTransacao): Boolean = tipoTransacao == TipoTransacao.ADIANTAMENTO
 
-    override fun baixa(transaction: TransactionDocument, pagamento: PixTransactionConsultationResponse) {
-        adiantamentoService.baixaAdiantamento(transaction, pagamento)
+    override fun baixa(transaction: TransactionDocument, pagamento: PixTransactionConsultationResponse): TransactionSettlementResult {
+        return TransactionSettlementResult(
+            settlementId = adiantamentoService.baixaAdiantamento(transaction, pagamento),
+        )
     }
 }

@@ -28,21 +28,19 @@ class PessoaService(
             BrowserRuntime.css("#vPESSOA_CODIGO").shouldBe(visible).setValue(idCliente.toString())
             BrowserRuntime.css("#IMGREFRESH").shouldBe(visible).click()
             homePage.waitAjaxLoadingToFinish()
-
-            val codigo = SelenideElementHelper.textOrNull("#span_PESSOA_CODIGO_0001")
+            val codigo = SelenideElementHelper.textOrNullByIdContains("PESSOA_CODIGOGRID")
                 ?.trim()
                 ?.toIntOrNull()
                 ?: throw IllegalArgumentException("Cliente $idCliente nao encontrado")
 
             Cliente(
                 codigo = codigo,
-                nome = SelenideElementHelper.textOrNull("#span_vPESSOA_NOMEGRID_0001"),
-                nomeFantasia = SelenideElementHelper.textOrNull("#span_vPESSOA_NOMEFANTASIAGRID_0001"),
-                cpfCnpj = SelenideElementHelper.textOrNull("#span_vPESSOA_DOCIDENTIFICADORGRID_0001"),
-                municipio = SelenideElementHelper.textOrNull("#span_vPESSOAENDERECO_MUNICIPIONOM_0001"),
-                uf = SelenideElementHelper.textOrNull("#span_vPESSOAENDERECO_ESTADOCOD_0001"),
-                ativo = SelenideElementHelper.isChecked("input[name='PESSOA_ATIVO_0001']"),
-                codigoMontadora = SelenideElementHelper.textOrNull("#span_PESSOA_CODIGOMONTADORA_0001"),
+                nome = SelenideElementHelper.textOrNullByIdContains("PESSOA_NOMEGRID"),
+                nomeFantasia = SelenideElementHelper.textOrNullByIdContains("PESSOA_NOMEFANTASIAGRID"),
+                cpfCnpj = SelenideElementHelper.textOrNullByIdContains("PESSOA_DOCIDENTIFICADORGRID"),
+                municipio = SelenideElementHelper.textOrNullByIdContains("PESSOAENDERECO_MUNICIPIONOM"),
+                uf = SelenideElementHelper.textOrNullByIdContains("PESSOAENDERECO_ESTADOCOD"),
+                ativo = SelenideElementHelper.isCheckedByNameContains("PESSOA_ATIVO")
             )
         }
     }

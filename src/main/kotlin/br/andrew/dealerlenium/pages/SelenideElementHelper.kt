@@ -13,6 +13,10 @@ object SelenideElementHelper {
         return text.ifEmpty { null }
     }
 
+    fun textOrNullByIdContains(idFragment: String): String? {
+        return textOrNull(selectorByAttributeContains("id", idFragment))
+    }
+
     fun isEnabled(selector: String): Boolean {
         val element = BrowserRuntime.css(selector)
         return element.exists() && element.getAttribute("disabled") == null
@@ -23,7 +27,16 @@ object SelenideElementHelper {
         return element.exists() && element.isSelected
     }
 
+    fun isCheckedByNameContains(nameFragment: String): Boolean {
+        return isChecked(selectorByAttributeContains("name", nameFragment))
+    }
+
     fun exists(selector: String): Boolean {
         return BrowserRuntime.css(selector).exists()
+    }
+
+    private fun selectorByAttributeContains(attribute: String, fragment: String): String {
+        val escapedFragment = fragment.replace("\\", "\\\\").replace("'", "\\'")
+        return "[$attribute*='$escapedFragment']"
     }
 }

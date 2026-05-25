@@ -11,6 +11,8 @@ import com.codeborne.selenide.SelenideConfig
 import com.codeborne.selenide.SelenideDriver
 import com.codeborne.selenide.WebDriverRunner
 import jakarta.annotation.PreDestroy
+import org.openqa.selenium.Cookie
+import org.openqa.selenium.JavascriptExecutor
 import org.openqa.selenium.NoSuchSessionException
 import org.openqa.selenium.WebDriver
 import org.openqa.selenium.WebDriverException
@@ -217,6 +219,8 @@ class BrowserSessionManager(
 
         return try {
             BrowserRuntime.withDriver(clonedSelenideDriver) {
+                clonedSelenideDriver.open(snapshot.bootstrapUrl)
+                restoreSessionState(clonedWebDriver, snapshot)
                 clonedSelenideDriver.open(snapshot.currentUrl)
                 action(homePage)
             }
@@ -250,10 +254,15 @@ class BrowserSessionManager(
 
     private fun captureSessionState(path : String = ""): BrowserSessionSnapshot {
         val currentUrl = sharedWebDriver.currentUrl ?: dealerProperties.indexUrl
+        val snapshotUrl = resolveSnapshotUrl(currentUrl, path)
 
         return BrowserSessionSnapshot(
-            currentUrl = resolveSnapshotUrl(currentUrl, path),
+            currentUrl = snapshotUrl,
+            bootstrapUrl = resolveBootstrapUrl(snapshotUrl),
             userDataDir = resolveUserDataDir(sharedWebDriver),
+            cookies = sharedWebDriver.manage().cookies.toSet(),
+            localStorage = captureStorage(sharedWebDriver, "localStorage"),
+            sessionStorage = captureStorage(sharedWebDriver, "sessionStorage"),
         )
     }
 
@@ -278,6 +287,38 @@ class BrowserSessionManager(
 
     private fun createSelenideDriver(webDriver: WebDriver): SelenideDriver {
         return SelenideDriver(SelenideConfig(), webDriver, null)
+    }
+
+    private fun restoreSessionState(driver: WebDriver, snapshot: BrowserSessionSnapshot) {
+        restoreCookies(driver, snapshot.cookies)
+        restoreStorage(driver, "localStorage", snapshot.localStorage)
+        restoreStorage(driver, "sessionStorage", snapshot.sessionStorage)
+    }
+
+    private fun restoreCookies(driver: WebDriver, cookies: Set<Cookie>) {
+        cookies.forEach { cookie ->
+            try {
+                driver.manage().deleteCookieNamed(cookie.name)
+                driver.manage().addCookie(cookie)
+            } catch (_: RuntimeException) {
+            }
+        }
+    }
+
+    private fun restoreStorage(driver: WebDriver, storageName: String, values: Map<String, String>) {
+        val javascriptExecutor = driver as? JavascriptExecutor ?: return
+        javascriptExecutor.executeScript(
+            """
+            const storage = window[arguments[0]];
+            const values = arguments[1] || {};
+            storage.clear();
+            for (const [key, value] of Object.entries(values)) {
+              storage.setItem(key, value);
+            }
+            """.trimIndent(),
+            storageName,
+            values,
+        )
     }
 
     private fun createExperimentalDriver(profileDir: Path): WebDriver {
@@ -360,6 +401,29 @@ class BrowserSessionManager(
         return Path.of(userDataDir)
     }
 
+    private fun captureStorage(driver: WebDriver, storageName: String): Map<String, String> {
+        val javascriptExecutor = driver as? JavascriptExecutor ?: return emptyMap()
+        val rawStorage = javascriptExecutor.executeScript(
+            """
+            const storage = window[arguments[0]];
+            const values = {};
+            for (let index = 0; index < storage.length; index += 1) {
+              const key = storage.key(index);
+              if (key !== null) {
+                values[key] = storage.getItem(key) ?? '';
+              }
+            }
+            return values;
+            """.trimIndent(),
+            storageName,
+        ) as? Map<*, *> ?: return emptyMap()
+
+        return rawStorage.entries.mapNotNull { (key, value) ->
+            val normalizedKey = key?.toString()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            normalizedKey to (value?.toString() ?: "")
+        }.toMap()
+    }
+
     private fun copyProfileDirectory(sourceDir: Path): Path {
         val targetDir = Files.createTempDirectory("dealer-cloned-profile-")
 
@@ -413,9 +477,18 @@ class BrowserSessionManager(
         }
     }
 
+    private fun resolveBootstrapUrl(currentUrl: String): String {
+        val currentUri = runCatching { URI(currentUrl) }.getOrNull() ?: return dealerProperties.indexUrl
+        return URI(currentUri.scheme, currentUri.authority, "/", null, null).toString()
+    }
+
     private data class BrowserSessionSnapshot(
         val currentUrl: String,
+        val bootstrapUrl: String,
         val userDataDir: Path,
+        val cookies: Set<Cookie>,
+        val localStorage: Map<String, String>,
+        val sessionStorage: Map<String, String>,
     )
 
     private fun chromeLockArtifactNames(): List<String> {

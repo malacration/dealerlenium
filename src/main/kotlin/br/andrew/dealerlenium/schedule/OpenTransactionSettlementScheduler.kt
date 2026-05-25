@@ -59,7 +59,7 @@ class OpenTransactionSettlementScheduler(
 
         runCatching {
             transactionRepository
-                .findByEncerradaEmIsNullAndProximaVerificacaoEmLessThanEqualOrderByProximaVerificacaoEmAsc(agora)
+                .findOpenTransactionsReadyForMonitoring(agora)
                 .forEach { transaction ->
                     val transactionId = transaction.id
                     if (transactionId == null) {

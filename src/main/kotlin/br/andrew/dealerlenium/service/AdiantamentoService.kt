@@ -5,9 +5,11 @@ import br.andrew.dealerlenium.infrastructure.configurations.EmpresaProperties
 import br.andrew.dealerlenium.model.PixTransactionConsultationResponse
 import br.andrew.dealerlenium.model.TransactionDocument
 import br.andrew.dealerlenium.pages.AspxInputHelper
+import br.andrew.dealerlenium.pages.AuthenticatedPage
 import br.andrew.dealerlenium.pages.FrameSwitcher
 import br.andrew.dealerlenium.pages.NavigationPage
 import com.codeborne.selenide.Condition.visible
+import org.openqa.selenium.By
 import org.springframework.stereotype.Service
 import java.time.ZoneId
 
@@ -18,8 +20,8 @@ class AdiantamentoService(
     private val empresaProperties: EmpresaProperties,
     private val frameSwitcher: FrameSwitcher,
 ) {
-    fun baixaAdiantamento(transaction: TransactionDocument, pagamento: PixTransactionConsultationResponse){
-        browserSessionManager.runInClonedStateDriver { session ->
+    fun baixaAdiantamento(transaction: TransactionDocument, pagamento: PixTransactionConsultationResponse): Int? {
+        return browserSessionManager.runInClonedStateDriver { session ->
             val empresa = empresaProperties.getEmpresaOrThrow(transaction.empresa)
             val adiantamento = empresa.adiantamento
             session.changeFilial(empresa)
@@ -80,14 +82,41 @@ class AdiantamentoService(
                 .shouldBe(visible)
                 .setValue(buildObservacao(transaction))
             AspxInputHelper.setMoney("#vTESOURARIA_VALOR", pagamento.valor ?: throw Exception("Não tem valor no pagamento"))
-//            BrowserRuntime.css("#CTLTESOURARIA_NRODOCUMENTO")
-//                .takeIf { it.exists() } //se existe e esta ativo e visivel
-//                ?.setValue("123")
 
-            frameSwitcher.afterCloseCurrentFrameSwitchToParent({
-                BrowserRuntime.css("#BTNCONFIRMAR").shouldBe(visible).click()
-            })
+            BrowserRuntime.css("#CTLTESOURARIA_NRODOCUMENTO")
+                .takeIf { it.exists() }
+                ?.setValue(transaction.reference.substring(0,14))
+
+            BrowserRuntime.css("#CTLTESOURARIA_NSU")
+                .takeIf { it.exists() } //se existe e esta ativo e visivel
+                ?.setValue(transaction.reference.substring(0,14))
+
+            return@runInClonedStateDriver finalizarBaixa(session)
         }
+    }
+
+    private fun finalizarBaixa(session: AuthenticatedPage): Int? {
+        var numero : Int? = null
+        frameSwitcher.afterCloseCurrentFrameSwitchToParent({
+            BrowserRuntime.css("#BTNCONFIRMAR").shouldBe(visible).click()
+            session.waitAjaxLoadingToFinish()
+            val alerta = BrowserRuntime.getWebDriver()
+                .findElements(By.cssSelector("#DVELOP_CONFIRMPANELContainer .Body"))
+                .firstOrNull()
+                ?.text
+                ?.trim()
+            if (!alerta.isNullOrEmpty()) {
+                throw Exception("Erro ao realizar baixa no ERP! Mensagem: ${alerta}")
+            }
+
+            val reciboText = BrowserRuntime.getWebDriver().findElements(By.cssSelector("#gxErrorViewer div")).joinToString { it.text }
+            numero = Regex("\\d+")
+                .find(reciboText)
+                ?.value
+                ?.toInt()
+
+        })
+        return numero
     }
 
     private fun buildObservacao(transaction: TransactionDocument): String {
