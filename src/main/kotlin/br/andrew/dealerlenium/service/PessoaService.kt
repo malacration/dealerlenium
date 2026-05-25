@@ -28,7 +28,7 @@ class PessoaService(
             BrowserRuntime.css("#vPESSOA_CODIGO").shouldBe(visible).setValue(idCliente.toString())
             BrowserRuntime.css("#IMGREFRESH").shouldBe(visible).click()
             homePage.waitAjaxLoadingToFinish()
-            val codigo = SelenideElementHelper.textOrNullByIdContains("PESSOA_CODIGOGRID")
+            val codigo = SelenideElementHelper.textOrNullByIdContains("span_PESSOA_CODIGO")
                 ?.trim()
                 ?.toIntOrNull()
                 ?: throw IllegalArgumentException("Cliente $idCliente nao encontrado")
