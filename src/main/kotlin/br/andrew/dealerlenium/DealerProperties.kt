@@ -17,6 +17,7 @@ data class DealerProperties(
     val startupLoginEnabled: Boolean = true,
     val sessionExpiryJobEnabled: Boolean = true,
     val autoCloseBrowser: Boolean = true,
+    val screenshotsEnabled: Boolean = false,
     val fullscreen: Boolean = false,
     val flow: List<FlowStep> = listOf(
         FlowStep.LOGIN,

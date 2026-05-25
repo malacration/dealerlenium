@@ -105,6 +105,8 @@ class BrowserSessionManager(
         discardDeadSessionReference()
         configureChromeRuntime()
         Configuration.headless = dealerProperties.headless
+        Configuration.screenshots = dealerProperties.screenshotsEnabled
+        Configuration.savePageSource = dealerProperties.screenshotsEnabled
         Configuration.browserCapabilities = createChromeOptions()
         loginPage.login()
 
@@ -292,7 +294,10 @@ class BrowserSessionManager(
     }
 
     private fun createSelenideDriver(webDriver: WebDriver): SelenideDriver {
-        return SelenideDriver(SelenideConfig(), webDriver, null)
+        val config = SelenideConfig()
+            .screenshots(dealerProperties.screenshotsEnabled)
+            .savePageSource(dealerProperties.screenshotsEnabled)
+        return SelenideDriver(config, webDriver, null)
     }
 
     private fun restoreSessionState(driver: WebDriver, snapshot: BrowserSessionSnapshot) {
