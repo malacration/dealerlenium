@@ -17,6 +17,12 @@ object SelenideElementHelper {
         return textOrNull(selectorByAttributeContains("id", idFragment))
     }
 
+    fun textOrNullByAnyIdContains(vararg idFragments: String): String? {
+        return idFragments.asSequence()
+            .map(::textOrNullByIdContains)
+            .firstOrNull { !it.isNullOrBlank() }
+    }
+
     fun isEnabled(selector: String): Boolean {
         val element = BrowserRuntime.css(selector)
         return element.exists() && element.getAttribute("disabled") == null
@@ -33,6 +39,13 @@ object SelenideElementHelper {
 
     fun exists(selector: String): Boolean {
         return BrowserRuntime.css(selector).exists()
+    }
+
+    fun selectorByAnyIdContains(vararg idFragments: String): String {
+        return idFragments.asSequence()
+            .map { selectorByAttributeContains("id", it) }
+            .firstOrNull { exists(it) }
+            ?: selectorByAttributeContains("id", idFragments.first())
     }
 
     private fun selectorByAttributeContains(attribute: String, fragment: String): String {

@@ -27,8 +27,12 @@ class PessoaService(
         return browserSessionManager.runInClonedStateDriver("wp_pessoaconsulta.aspx") { homePage ->
             BrowserRuntime.css("#vPESSOA_CODIGO").shouldBe(visible).setValue(idCliente.toString())
             BrowserRuntime.css("#IMGREFRESH").shouldBe(visible).click()
+
             homePage.waitAjaxLoadingToFinish()
-            val codigo = SelenideElementHelper.textOrNullByIdContains("span_PESSOA_CODIGO")
+            val codigo = SelenideElementHelper.textOrNullByAnyIdContains(
+                "span_PESSOA_CODIGO",
+                "vPESSOA_CODIGOGRID",
+            )
                 ?.trim()
                 ?.toIntOrNull()
                 ?: throw IllegalArgumentException("Cliente $idCliente nao encontrado")

@@ -12,6 +12,12 @@ repositories {
     mavenCentral()
 }
 
+sourceSets {
+    named("test") {
+        resources.srcDir("environments")
+    }
+}
+
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter")
     implementation("org.springframework.boot:spring-boot-starter-security")
@@ -29,8 +35,16 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
 
-tasks.test {
+tasks.withType<Test>().configureEach {
     useJUnitPlatform()
+
+    val dealerTestContext = providers.gradleProperty("dealerTestContext")
+        .orElse(providers.systemProperty("dealer.test.context"))
+        .orElse(providers.systemProperty("DEALER_TEST_CONTEXT"))
+        .orElse(providers.environmentVariable("DEALER_TEST_CONTEXT"))
+        .getOrElse("hmg")
+
+    systemProperty("DEALER_TEST_CONTEXT", dealerTestContext)
 }
 
 tasks.register<Test>("dealerAdiantamentoPipelineTest") {

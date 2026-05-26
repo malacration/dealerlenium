@@ -27,6 +27,7 @@ import kotlin.test.assertTrue
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("dealer-e2e-pipeline")
 @EnabledIfEnvironmentVariable(named = "RUN_DEALER_ADIANTAMENTO_PIPELINE_TEST", matches = "true")
+@Tag("dealer-adiantamento-pipeline")
 class AdiantamentoSettlementPipelineIntegrationTest {
 
     @Autowired
