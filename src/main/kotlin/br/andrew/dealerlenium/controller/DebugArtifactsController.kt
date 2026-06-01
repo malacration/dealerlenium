@@ -6,12 +6,11 @@ import org.springframework.http.ContentDisposition
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
-import org.springframework.stereotype.Controller
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
-import org.springframework.web.bind.annotation.ResponseBody
+import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.server.ResponseStatusException
 import org.springframework.http.HttpStatus
 import java.net.URLEncoder
@@ -27,16 +26,15 @@ import kotlin.io.path.isDirectory
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.name
 
-@Controller
+@RestController
 @RequestMapping("/api/debug/artifacts")
 class DebugArtifactsController {
     private val debugDirectory: Path = Path.of("build", "reports", "dealer-debug")
     private val timestampFormatter: DateTimeFormatter =
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.systemDefault())
 
-    @GetMapping(produces = [MediaType.TEXT_HTML_VALUE])
-    @ResponseBody
-    fun listArtifacts(): String {
+    @GetMapping
+    fun listArtifacts(): DebugArtifactsResponse {
         val files = if (debugDirectory.isDirectory()) {
             Files.list(debugDirectory).use { paths ->
                 paths
@@ -56,57 +54,23 @@ class DebugArtifactsController {
             emptyList()
         }
 
-        return buildString {
-            appendLine("<!DOCTYPE html>")
-            appendLine("<html lang=\"pt-BR\">")
-            appendLine("<head>")
-            appendLine("<meta charset=\"UTF-8\">")
-            appendLine("<title>Dealer Debug Artifacts</title>")
-            appendLine("<style>")
-            appendLine("body { font-family: sans-serif; margin: 24px; }")
-            appendLine("table { border-collapse: collapse; width: 100%; }")
-            appendLine("th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }")
-            appendLine("th { background: #f5f5f5; }")
-            appendLine("code { background: #f3f3f3; padding: 2px 4px; }")
-            appendLine("a { text-decoration: none; }")
-            appendLine("</style>")
-            appendLine("</head>")
-            appendLine("<body>")
-            appendLine("<h1>Dealer Debug Artifacts</h1>")
-            appendLine("<p>Diretorio: <code>${escapeHtml(debugDirectory.toAbsolutePath().toString())}</code></p>")
-            appendLine("<p>Endpoint: <code>/api/debug/artifacts</code></p>")
-
-            if (files.isEmpty()) {
-                appendLine("<p>Nenhum arquivo encontrado.</p>")
-            } else {
-                appendLine("<table>")
-                appendLine("<thead>")
-                appendLine("<tr><th>Arquivo</th><th>Modificado em</th><th>Tamanho</th><th>Links</th></tr>")
-                appendLine("</thead>")
-                appendLine("<tbody>")
-                files.forEach { file ->
-                    val encodedName = encodePathSegment(file.name)
-                    val viewUrl = "./files/$encodedName"
-                    val downloadUrl = "./files/$encodedName?download=true"
-                    appendLine(
-                        "<tr>" +
-                            "<td><code>${escapeHtml(file.name)}</code></td>" +
-                            "<td>${escapeHtml(timestampFormatter.format(file.lastModified))}</td>" +
-                            "<td>${escapeHtml(formatSize(file.size))}</td>" +
-                            "<td>" +
-                            "<a href=\"$viewUrl\">abrir</a> | " +
-                            "<a href=\"$downloadUrl\">baixar</a>" +
-                            "</td>" +
-                            "</tr>"
-                    )
-                }
-                appendLine("</tbody>")
-                appendLine("</table>")
-            }
-
-            appendLine("</body>")
-            appendLine("</html>")
-        }
+        return DebugArtifactsResponse(
+            directory = debugDirectory.toAbsolutePath().toString(),
+            endpoint = "/api/debug/artifacts",
+            totalFiles = files.size,
+            files = files.map { file ->
+                val encodedName = encodePathSegment(file.name)
+                DebugArtifactItemResponse(
+                    name = file.name,
+                    extension = file.extension,
+                    sizeBytes = file.size,
+                    sizeLabel = formatSize(file.size),
+                    lastModified = timestampFormatter.format(file.lastModified),
+                    viewUrl = "./files/$encodedName",
+                    downloadUrl = "./files/$encodedName?download=true",
+                )
+            },
+        )
     }
 
     @GetMapping("/files/{fileName:.+}")
@@ -147,23 +111,6 @@ class DebugArtifactsController {
         return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")
     }
 
-    private fun escapeHtml(value: String): String {
-        return buildString(value.length) {
-            value.forEach { char ->
-                append(
-                    when (char) {
-                        '&' -> "&amp;"
-                        '<' -> "&lt;"
-                        '>' -> "&gt;"
-                        '"' -> "&quot;"
-                        '\'' -> "&#39;"
-                        else -> char
-                    }
-                )
-            }
-        }
-    }
-
     private fun formatSize(size: Long): String {
         if (size < 1024) {
             return "$size B"
@@ -181,3 +128,20 @@ class DebugArtifactsController {
         val extension: String,
     )
 }
+
+data class DebugArtifactsResponse(
+    val directory: String,
+    val endpoint: String,
+    val totalFiles: Int,
+    val files: List<DebugArtifactItemResponse>,
+)
+
+data class DebugArtifactItemResponse(
+    val name: String,
+    val extension: String,
+    val sizeBytes: Long,
+    val sizeLabel: String,
+    val lastModified: String,
+    val viewUrl: String,
+    val downloadUrl: String,
+)

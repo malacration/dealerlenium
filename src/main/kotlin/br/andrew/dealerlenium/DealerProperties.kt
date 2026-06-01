@@ -48,7 +48,7 @@ data class NavigationProperties(
     val financeiroSelector: String = "xpath=//table[contains(concat('',normalize-space(@class),''),'x-toolbar-ct')]//button[contains(normalize-space(.), 'Financeiro')]",
     val cadastroSelector: String = "xpath=//table[contains(concat('',normalize-space(@class),''),'x-toolbar-ct')]//button[contains(normalize-space(.), 'Cadastro')]",
     val contasPagarHoverSelector: String = "xpath=//li[.//span[contains(normalize-space(.),'Contas a Pagar')]]",
-    val pessoasReceberSelector: String = "xpath=//li[.//span[contains(normalize-space(.),'Pessoas')]]",
+    val pessoasSelector: String = "xpath=//li[.//span[contains(normalize-space(.),'Pessoas')]]",
     val titulosPagarSelector: String = "xpath=//li[.//span[contains(normalize-space(.),'Título a Pagar')]]",
     val contasReceberHoverSelector: String = "xpath=//li[.//span[contains(normalize-space(.),'Contas a Receber')]]",
     val tesourariaHoverSelector: String = "xpath=//li[.//span[contains(normalize-space(.),'Tesouraria')]]",

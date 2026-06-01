@@ -15,6 +15,14 @@ class NavigationPage(
 )  {
     fun goHome(fromPage: AuthenticatedPage): HomePage = fromPage.goHome()
 
+    fun goPessoas(fromPage: AuthenticatedPage): ContasReceberPage {
+        fromPage.waitAjaxLoadingToFinish()
+        clickRequired(dealerProperties.navigation.cadastroSelector)
+        clickRequired(dealerProperties.navigation.pessoasSelector)
+        frameSwitcher.switchToFrameBySrc("wp_pessoaconsulta.aspx")
+        return contasReceberPage
+    }
+
     fun goContasReceber(fromPage: AuthenticatedPage): ContasReceberPage {
         fromPage.waitAjaxLoadingToFinish()
         clickRequired(dealerProperties.navigation.financeiroSelector)

@@ -7,6 +7,7 @@ import br.andrew.dealerlenium.model.Cliente
 import br.andrew.dealerlenium.model.PixPagamentoResponse
 import br.andrew.dealerlenium.model.TransactionParameters
 import br.andrew.dealerlenium.model.TipoTransacao
+import br.andrew.dealerlenium.pages.NavigationPage
 import br.andrew.dealerlenium.pages.SelenideElementHelper
 import com.codeborne.selenide.Condition.visible
 import org.springframework.stereotype.Service
@@ -19,12 +20,14 @@ import java.util.UUID
 class PessoaService(
     private val browserSessionManager: BrowserSessionManager,
     private val uzziPixService: UzziPixService,
+    private val nav : NavigationPage,
     private val pixTransactionHistoryService: PixTransactionHistoryService,
     private val empresaProperties: EmpresaProperties,
 ) {
 
     fun getCliente(idCliente: Int): Cliente {
-        return browserSessionManager.runInClonedStateDriver("wp_pessoaconsulta.aspx") { homePage ->
+        return browserSessionManager.runInClonedStateDriver() { homePage ->
+            nav.goPessoas(homePage)
             BrowserRuntime.css(
                 SelenideElementHelper.selectorByAnyIdContains(
                     "vPESSOA_CODIGO",
