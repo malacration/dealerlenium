@@ -19,6 +19,9 @@ object SelenideElementHelper {
 
     fun textOrNullByAnyIdContains(vararg idFragments: String): String? {
         return idFragments.asSequence()
+            .map(::textOrNullByExactId)
+            .firstOrNull { !it.isNullOrBlank() }
+            ?: idFragments.asSequence()
             .map(::textOrNullByIdContains)
             .firstOrNull { !it.isNullOrBlank() }
     }
@@ -43,9 +46,21 @@ object SelenideElementHelper {
 
     fun selectorByAnyIdContains(vararg idFragments: String): String {
         return idFragments.asSequence()
+            .map(::selectorByExactId)
+            .firstOrNull { exists(it) }
+            ?: idFragments.asSequence()
             .map { selectorByAttributeContains("id", it) }
             .firstOrNull { exists(it) }
-            ?: selectorByAttributeContains("id", idFragments.first())
+            ?: selectorByExactId(idFragments.first())
+    }
+
+    private fun textOrNullByExactId(id: String): String? {
+        return textOrNull(selectorByExactId(id))
+    }
+
+    private fun selectorByExactId(id: String): String {
+        val escapedId = id.replace("\\", "\\\\").replace("\"", "\\\"")
+        return "[id=\"$escapedId\"]"
     }
 
     private fun selectorByAttributeContains(attribute: String, fragment: String): String {
