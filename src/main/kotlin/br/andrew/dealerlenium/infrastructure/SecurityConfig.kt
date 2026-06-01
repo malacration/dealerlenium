@@ -40,6 +40,8 @@ class SecurityConfig(
                 auth
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                     .requestMatchers("/", "/health").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/debug/artifacts", "/api/debug/artifacts/**").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/debug/pessoa/**").permitAll()
                     .requestMatchers(HttpMethod.POST, "/pix/share/verify").permitAll()
                     .anyRequest().authenticated()
             }
