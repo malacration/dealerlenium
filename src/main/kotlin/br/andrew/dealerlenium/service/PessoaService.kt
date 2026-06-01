@@ -25,7 +25,12 @@ class PessoaService(
 
     fun getCliente(idCliente: Int): Cliente {
         return browserSessionManager.runInClonedStateDriver("wp_pessoaconsulta.aspx") { homePage ->
-            BrowserRuntime.css("#vPESSOA_CODIGO").shouldBe(visible).setValue(idCliente.toString())
+            BrowserRuntime.css(
+                SelenideElementHelper.selectorByAnyIdContains(
+                    "vPESSOA_CODIGO",
+                    "vPESSOA_CODIGOGRID",
+                )
+            ).shouldBe(visible).setValue(idCliente.toString())
             BrowserRuntime.css("#IMGREFRESH").shouldBe(visible).click()
 
             homePage.waitAjaxLoadingToFinish()
