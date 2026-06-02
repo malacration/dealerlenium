@@ -188,7 +188,20 @@ class AdiantamentoService(
     }
 
     private fun buildObservacao(transaction: TransactionDocument): String {
-        return "Baixa automatica de adiantamento PIX ref ${transaction.reference} txId ${transaction.txId} " +
-            "para cliente ${transaction.clienteNome} no valor de ${transaction.valor}."
+        return buildString {
+            append("Baixa automatica de adiantamento PIX ref ")
+            append(transaction.reference)
+            append(" para cliente ")
+            append(transaction.clienteNome)
+            append(" no valor de ")
+            append(transaction.valor)
+            transaction.usuarioGeracao?.trim()
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { usuario ->
+                    append(". Cobranca gerada por ")
+                    append(usuario)
+                }
+            append(".")
+        }
     }
 }

@@ -17,6 +17,7 @@ class PixTransactionHistoryService(
     private val empresaProperties: EmpresaProperties,
     private val transactionRepository: TransactionRepository,
     private val monitoringPolicy: TransactionMonitoringPolicy,
+    private val currentUserService: CurrentUserService,
 ) {
     fun salvarHistoricoPix(
         conta: ContasReceberRegistro,
@@ -34,6 +35,7 @@ class PixTransactionHistoryService(
             cnpjContaRecebimento = empresaConfigurada.cnpj,
             chavePixRecebimento = empresaConfigurada.chavePix,
             nomeTitularContaRecebimento = empresaConfigurada.titular,
+            usuarioGeracao = currentUserService.getCurrentUsernameOrNull(),
             proximaVerificacaoEm = monitoringPolicy.proximaExecucao(
                 pixPagamentoResponse.tipoTransacao,
                 retornoPix.data.generatedAt?.toInstant() ?: Instant.now(),
@@ -76,6 +78,7 @@ class PixTransactionHistoryService(
             cnpjContaRecebimento = empresaConfigurada.cnpj,
             chavePixRecebimento = empresaConfigurada.chavePix,
             nomeTitularContaRecebimento = empresaConfigurada.titular,
+            usuarioGeracao = currentUserService.getCurrentUsernameOrNull(),
             proximaVerificacaoEm = monitoringPolicy.proximaExecucao(
                 pixPagamentoResponse.tipoTransacao,
                 retornoPix.data.generatedAt?.toInstant() ?: Instant.now(),

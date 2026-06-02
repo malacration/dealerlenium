@@ -35,6 +35,7 @@ data class TransactionDocument(
     val cnpjContaRecebimento: String,
     val chavePixRecebimento: String?,
     val nomeTitularContaRecebimento: String?,
+    val usuarioGeracao: String? = null,
     val createdAt: Instant = Instant.now(),
     val ultimaVerificacaoEm: Instant? = null,
     val proximaVerificacaoEm: Instant? = null,
@@ -52,6 +53,7 @@ data class TransactionDocument(
         cnpjContaRecebimento: String,
         chavePixRecebimento: String?,
         nomeTitularContaRecebimento: String?,
+        usuarioGeracao: String? = null,
         proximaVerificacaoEm: Instant? = null,
     ) : this(
         id = null,
@@ -77,6 +79,7 @@ data class TransactionDocument(
         cnpjContaRecebimento = cnpjContaRecebimento,
         chavePixRecebimento = chavePixRecebimento,
         nomeTitularContaRecebimento = nomeTitularContaRecebimento,
+        usuarioGeracao = usuarioGeracao,
         proximaVerificacaoEm = proximaVerificacaoEm,
     )
 
