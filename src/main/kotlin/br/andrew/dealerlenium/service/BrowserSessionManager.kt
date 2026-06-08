@@ -74,7 +74,12 @@ class BrowserSessionManager(
     fun <T> runInNewTab(action: (HomePage) -> T): T {
         return runOnBrowserThread {
             initializeSessionIfNeeded()
-            runInSessionTab(dealerProperties.indexUrl, action)
+            try {
+                runInSessionTab(dealerProperties.indexUrl, action)
+            } catch (error: DealerSessionExpiredException) {
+                refreshSharedSessionOnBrowserThread()
+                runInSessionTab(dealerProperties.indexUrl, action)
+            }
         }
     }
 
@@ -188,6 +193,7 @@ class BrowserSessionManager(
         return try {
             sessionId.toString().isNotBlank()
                 && sharedWebDriver.windowHandles.contains(mainWindowHandle)
+                && !isMainWindowOnLoginPage()
         } catch (_: NoSuchSessionException) {
             false
         } catch (_: WebDriverException) {
@@ -205,12 +211,32 @@ class BrowserSessionManager(
         initialized = false
     }
 
+    private fun isMainWindowOnLoginPage(): Boolean {
+        val currentWindowHandle = runCatching { sharedWebDriver.windowHandle }.getOrNull()
+        return try {
+            sharedWebDriver.switchTo().window(mainWindowHandle)
+            isLoginPageUrl(sharedWebDriver.currentUrl)
+        } finally {
+            if (currentWindowHandle != null && currentWindowHandle != mainWindowHandle) {
+                runCatching { sharedWebDriver.switchTo().window(currentWindowHandle) }
+            }
+        }
+    }
+
     private fun <T> runOnBrowserThread(action: () -> T): T {
         val future = browserExecutor.submit(Callable<T> { action() })
         return future.get()
     }
 
     fun <T> runInClonedStateDriver(path : String  = "", action: (HomePage) -> T): T {
+        return runInClonedStateDriver(path, retriedAfterLoginRedirect = false, action)
+    }
+
+    private fun <T> runInClonedStateDriver(
+        path: String = "",
+        retriedAfterLoginRedirect: Boolean,
+        action: (HomePage) -> T,
+    ): T {
         val snapshot = runOnBrowserThread {
             initializeSessionIfNeeded()
             captureSessionState(path)
@@ -225,9 +251,22 @@ class BrowserSessionManager(
                 clonedSelenideDriver.open(snapshot.bootstrapUrl)
                 restoreSessionState(clonedWebDriver, snapshot)
                 clonedSelenideDriver.open(snapshot.currentUrl)
+                if (isLoginPageUrl(clonedWebDriver.currentUrl)) {
+                    throw DealerSessionExpiredException()
+                }
                 action(homePage)
             }
+        } catch (error: DealerSessionExpiredException) {
+            if (!retriedAfterLoginRedirect) {
+                refreshSharedSessionFromAnyThread()
+                return runInClonedStateDriver(path, retriedAfterLoginRedirect = true, action)
+            }
+            throw error
         } catch (error: Throwable) {
+            if (!retriedAfterLoginRedirect && isLoginPageUrl(clonedWebDriver.currentUrl)) {
+                refreshSharedSessionFromAnyThread()
+                return runInClonedStateDriver(path, retriedAfterLoginRedirect = true, action)
+            }
             BrowserRuntime.withDriver(clonedSelenideDriver) {
                 BrowserDebugArtifacts.captureCurrentContext("cloned-session-failure")
             }
@@ -245,9 +284,12 @@ class BrowserSessionManager(
         val requestWindowHandle = sharedWebDriver.switchTo().newWindow(WindowType.TAB).windowHandle
         sharedWebDriver.switchTo().window(requestWindowHandle)
         sharedWebDriver.switchTo().defaultContent()
-        open(targetUrl)
 
         return try {
+            open(targetUrl)
+            if (isLoginPageUrl(sharedWebDriver.currentUrl)) {
+                throw DealerSessionExpiredException()
+            }
             action(homePage)
         } finally {
             try {
@@ -262,6 +304,10 @@ class BrowserSessionManager(
 
     private fun captureSessionState(path : String = ""): BrowserSessionSnapshot {
         val currentUrl = sharedWebDriver.currentUrl ?: dealerProperties.indexUrl
+        if (isLoginPageUrl(currentUrl)) {
+            initialized = false
+            throw DealerSessionExpiredException()
+        }
         val snapshotUrl = resolveSnapshotUrl(currentUrl, path)
 
         return BrowserSessionSnapshot(
@@ -492,6 +538,24 @@ class BrowserSessionManager(
         val currentUri = runCatching { URI(currentUrl) }.getOrNull() ?: return dealerProperties.indexUrl
         return URI(currentUri.scheme, currentUri.authority, "/", null, null).toString()
     }
+
+    private fun refreshSharedSessionFromAnyThread() {
+        runOnBrowserThread {
+            refreshSharedSessionOnBrowserThread()
+        }
+    }
+
+    private fun refreshSharedSessionOnBrowserThread() {
+        discardDeadSessionReference()
+        initializeSessionIfNeeded()
+    }
+
+    private fun isLoginPageUrl(currentUrl: String?): Boolean {
+        val path = runCatching { URI(currentUrl.orEmpty()).path.orEmpty() }.getOrDefault(currentUrl.orEmpty())
+        return path.endsWith("/login.aspx", ignoreCase = true) || path.equals("login.aspx", ignoreCase = true)
+    }
+
+    private class DealerSessionExpiredException : RuntimeException("Dealer session redirected to login page.")
 
     private data class BrowserSessionSnapshot(
         val currentUrl: String,

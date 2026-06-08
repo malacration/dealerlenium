@@ -198,7 +198,7 @@ class AdiantamentoService(
             transaction.usuarioGeracao?.trim()
                 ?.takeIf { it.isNotEmpty() }
                 ?.let { usuario ->
-                    append(". Cobranca gerada por ")
+                    append(". Cobrança gerada por ")
                     append(usuario)
                 }
             append(".")
