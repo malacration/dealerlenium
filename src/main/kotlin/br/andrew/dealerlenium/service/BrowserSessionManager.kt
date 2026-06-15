@@ -551,8 +551,7 @@ class BrowserSessionManager(
     }
 
     private fun isLoginPageUrl(currentUrl: String?): Boolean {
-        val path = runCatching { URI(currentUrl.orEmpty()).path.orEmpty() }.getOrDefault(currentUrl.orEmpty())
-        return path.endsWith("/login.aspx", ignoreCase = true) || path.equals("login.aspx", ignoreCase = true)
+        return isDealerLoginPageUrl(currentUrl)
     }
 
     private class DealerSessionExpiredException : RuntimeException("Dealer session redirected to login page.")
@@ -584,3 +583,12 @@ class BrowserSessionManager(
         private val SESSION_EXPIRY_RUN_INTERVAL: Duration = Duration.ofSeconds(10)
     }
 }
+
+internal fun isDealerLoginPageUrl(currentUrl: String?): Boolean {
+    return DEALER_LOGIN_PAGE_PATTERN.containsMatchIn(currentUrl.orEmpty())
+}
+
+private val DEALER_LOGIN_PAGE_PATTERN = Regex(
+    pattern = """login(?:aux)?\.aspx""",
+    option = RegexOption.IGNORE_CASE,
+)
