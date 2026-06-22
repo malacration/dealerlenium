@@ -26,6 +26,27 @@ object SelenideElementHelper {
             .firstOrNull { !it.isNullOrBlank() }
     }
 
+    /**
+     * Espera (por conteudo, nao por timing) ate que o texto de algum dos elementos
+     * identificados por [idFragments] seja igual a [expected], ou ate o timeout.
+     * Retorna o ultimo texto observado (ja trimado), que o chamador deve validar:
+     * vazio/null = nao encontrado; diferente de [expected] = leitura suja/defasada.
+     */
+    fun waitForTextByAnyIdContains(
+        expected: String,
+        vararg idFragments: String,
+        timeoutMs: Long = 8000,
+        pollMs: Long = 100,
+    ): String? {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        var last = textOrNullByAnyIdContains(*idFragments)?.trim()
+        while (last != expected && System.currentTimeMillis() < deadline) {
+            BrowserRuntime.sleep(pollMs)
+            last = textOrNullByAnyIdContains(*idFragments)?.trim()
+        }
+        return last
+    }
+
     fun isEnabled(selector: String): Boolean {
         val element = BrowserRuntime.css(selector)
         return element.exists() && element.getAttribute("disabled") == null

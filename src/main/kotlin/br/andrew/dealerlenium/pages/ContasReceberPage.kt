@@ -2,6 +2,7 @@ package br.andrew.dealerlenium.pages
 
 import br.andrew.dealerlenium.DealerProperties
 import br.andrew.dealerlenium.browser.BrowserRuntime
+import br.andrew.dealerlenium.service.StaleDealerReadException
 import com.codeborne.selenide.Condition.visible
 import org.springframework.stereotype.Component
 
@@ -42,8 +43,15 @@ class ContasReceberPage(
         BrowserRuntime.css("#BTNCONSULTAR").shouldBe(visible).click()
         this.waitAjaxLoadingToFinish()
 
-        if(!SelenideElementHelper.exists("#span_vGRID_TITULO_VALOR_0001"))
-            throw Exception("Registor não existe")
+        // Espera por conteudo: o grid precisa refletir o lancamento pedido antes da leitura.
+        val lancamento = SelenideElementHelper.waitForTextByAnyIdContains(
+            id.toString(),
+            "span_vGRID_TITULO_CODIGO_0001",
+        )
+        if (lancamento.isNullOrBlank() || !SelenideElementHelper.exists("#span_vGRID_TITULO_VALOR_0001"))
+            throw Exception("Registro não existe")
+        if (lancamento != id.toString())
+            throw StaleDealerReadException("Grid de titulos retornou lancamento $lancamento para a busca de $id")
 
         return ContasReceberRegistro(
             tmpTitulosUsuario = SelenideElementHelper.textOrNull("#span_vTMPTITULOS_USUARIO_0001"),

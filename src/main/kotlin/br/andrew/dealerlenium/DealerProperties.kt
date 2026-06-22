@@ -11,8 +11,9 @@ import java.time.Duration
 data class DealerProperties(
     val loginUrl: String,
     val indexUrl: String,
-    @field:NotBlank val username: String,
-    @field:NotBlank val password: String,
+    val username: String = "",
+    val password: String = "",
+    val credentials: List<DealerCredential> = emptyList(),
     val headless: Boolean = true,
     val startupLoginEnabled: Boolean = true,
     val sessionExpiryJobEnabled: Boolean = true,
@@ -32,7 +33,32 @@ data class DealerProperties(
     val transactionMonitoring: TransactionMonitoringProperties = TransactionMonitoringProperties(),
 ) {
 
+    /**
+     * Credenciais que compoem o pool de sessoes independentes do dealer.
+     * Cada credencial vira uma sessao com login proprio (ASP.NET_SessionId proprio),
+     * de modo que o tamanho do pool = numero de credenciais disponiveis.
+     * Quando apenas [username]/[password] estao configurados, o pool tem tamanho 1
+     * (serializa as requisicoes naturalmente).
+     */
+    fun resolveCredentials(): List<DealerCredential> {
+        val configured = credentials
+            .filter { it.username.isNotBlank() && it.password.isNotBlank() }
+        if (configured.isNotEmpty()) {
+            return configured
+        }
+        if (username.isNotBlank() && password.isNotBlank()) {
+            return listOf(DealerCredential(username, password))
+        }
+        throw IllegalStateException(
+            "Nenhuma credencial do dealer configurada. Defina dealer.credentials ou dealer.username/password.",
+        )
+    }
 }
+
+data class DealerCredential(
+    @field:NotBlank val username: String = "",
+    @field:NotBlank val password: String = "",
+)
 
 enum class FlowStep {
     LOGIN,

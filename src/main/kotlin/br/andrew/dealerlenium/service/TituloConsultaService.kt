@@ -11,7 +11,7 @@ class TituloConsultaService(
 ) {
     fun buscarValorTitulo(empresa: String, idTitulo: Int): ContasReceberRegistro {
         println("buscando ")
-        return browserSessionManager.runInClonedStateDriver { homePage ->
+        return browserSessionManager.runInSession { homePage ->
             val contasReceberPage = navigationPage.goContasReceber(homePage)
             contasReceberPage.filtroEmpresa(empresa)
             contasReceberPage.getContasReceberByCodigo(idTitulo)

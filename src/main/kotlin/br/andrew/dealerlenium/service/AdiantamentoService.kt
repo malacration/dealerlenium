@@ -25,7 +25,7 @@ class AdiantamentoService(
     private val logger = LoggerFactory.getLogger(javaClass)
 
     fun baixaAdiantamento(transaction: TransactionDocument, pagamento: PixTransactionConsultationResponse): Int? {
-        return browserSessionManager.runInClonedStateDriver { session ->
+        return browserSessionManager.runInSession { session ->
             val empresa = empresaProperties.getEmpresaOrThrow(transaction.empresa)
             val adiantamento = empresa.adiantamento
             session.changeFilial(empresa)
@@ -95,7 +95,7 @@ class AdiantamentoService(
                 .takeIf { it.exists() } //se existe e esta ativo e visivel
                 ?.setValue(transaction.reference.substring(0,14))
 
-            return@runInClonedStateDriver finalizarBaixa(session)
+            return@runInSession finalizarBaixa(session)
         }
     }
 

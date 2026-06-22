@@ -26,7 +26,7 @@ class PessoaService(
 ) {
 
     fun getCliente(idCliente: Int): Cliente {
-        return browserSessionManager.runInClonedStateDriver() { homePage ->
+        return browserSessionManager.runInSession() { homePage ->
             nav.goPessoas(homePage)
             BrowserRuntime.css(
                 SelenideElementHelper.selectorByAnyIdContains(
@@ -37,13 +37,20 @@ class PessoaService(
             BrowserRuntime.css("#IMGREFRESH").shouldBe(visible).click()
 
             homePage.waitAjaxLoadingToFinish()
-            val codigo = SelenideElementHelper.textOrNullByAnyIdContains(
+            // Espera por conteudo: o grid precisa refletir exatamente o id pedido antes
+            // de ler os demais campos, evitando leitura da linha anterior (Francisco/Sabrina).
+            val codigoText = SelenideElementHelper.waitForTextByAnyIdContains(
+                idCliente.toString(),
                 "span_PESSOA_CODIGO",
                 "vPESSOA_CODIGOGRID",
             )
-                ?.trim()
-                ?.toIntOrNull()
+            val codigo = codigoText?.toIntOrNull()
                 ?: throw IllegalArgumentException("Cliente $idCliente nao encontrado")
+            if (codigo != idCliente) {
+                throw StaleDealerReadException(
+                    "Grid de pessoas retornou o codigo $codigo para a busca de $idCliente",
+                )
+            }
 
             Cliente(
                 codigo = codigo,

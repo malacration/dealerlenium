@@ -1,84 +1,149 @@
 package br.andrew.dealerlenium.service
 
 import br.andrew.dealerlenium.DealerProperties
-import br.andrew.dealerlenium.browser.BrowserDebugArtifacts
-import br.andrew.dealerlenium.browser.BrowserRuntime
 import br.andrew.dealerlenium.pages.HomePage
 import br.andrew.dealerlenium.pages.LoginPage
 import br.andrew.dealerlenium.schedule.MainTabSessionExpiryJob
-import com.codeborne.selenide.Configuration
-import com.codeborne.selenide.Selenide.open
-import com.codeborne.selenide.SelenideConfig
-import com.codeborne.selenide.SelenideDriver
-import com.codeborne.selenide.WebDriverRunner
 import jakarta.annotation.PreDestroy
-import org.openqa.selenium.Cookie
-import org.openqa.selenium.JavascriptExecutor
-import org.openqa.selenium.NoSuchSessionException
-import org.openqa.selenium.WebDriver
-import org.openqa.selenium.WebDriverException
-import org.openqa.selenium.WindowType
-import org.openqa.selenium.chrome.ChromeDriver
-import org.openqa.selenium.chrome.ChromeOptions
-import org.openqa.selenium.remote.RemoteWebDriver
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
-import java.net.URI
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.StandardCopyOption
 import java.time.Duration
-import java.time.Instant
-import java.util.Comparator
-import java.util.concurrent.Callable
 import java.util.concurrent.Executors
+import java.util.concurrent.LinkedBlockingDeque
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
-import kotlin.io.path.deleteIfExists
-import kotlin.io.path.exists
 
+/**
+ * Pool de sessoes independentes do dealer.
+ *
+ * Cada credencial configurada ([DealerProperties.resolveCredentials]) vira uma
+ * [DealerSession] com login proprio e, portanto, com `ASP.NET_SessionId` proprio.
+ * As requisicoes pegam emprestada uma sessao exclusiva ([runInSession]); como o
+ * GeneXus mantem o estado do grid no servidor indexado pela sessao, isso evita que
+ * buscas concorrentes contaminem o estado uma da outra.
+ *
+ * Com apenas uma credencial o pool tem tamanho 1, e o [available] serializa as
+ * requisicoes naturalmente (uma e resolvida depois da outra).
+ */
 @Service
 class BrowserSessionManager(
     private val dealerProperties: DealerProperties,
+    private val browserFactory: DealerBrowserFactory,
     private val loginPage: LoginPage,
     private val homePage: HomePage,
     private val mainTabSessionExpiryJob: MainTabSessionExpiryJob,
 ) {
-    private val browserExecutor = Executors.newSingleThreadExecutor { runnable ->
-        Thread(runnable, "dealer-browser-worker").apply {
-            isDaemon = false
-        }
+    private val logger = LoggerFactory.getLogger(javaClass)
+
+    private val sessions: List<DealerSession> by lazy { buildSessions() }
+    private val available: LinkedBlockingDeque<DealerSession> by lazy {
+        LinkedBlockingDeque<DealerSession>().apply { sessions.forEach(::add) }
     }
+
     private val sessionExpiryMonitorExecutor: ScheduledExecutorService =
         Executors.newSingleThreadScheduledExecutor { runnable ->
-            Thread(runnable, "dealer-session-expiry-monitor").apply {
-                isDaemon = true
-            }
+            Thread(runnable, "dealer-session-expiry-monitor").apply { isDaemon = true }
         }
 
     @Volatile
-    private var initialized = false
-    @Volatile
     private var sessionExpiryMonitorStarted = false
-    private var nextSessionExpiryJobRunAt: Instant = Instant.MIN
 
-    private lateinit var sharedWebDriver: WebDriver
-    private lateinit var mainWindowHandle: String
+    private fun buildSessions(): List<DealerSession> {
+        val credentials = dealerProperties.resolveCredentials()
+        logger.info("Inicializando pool de sessoes do dealer com {} credencial(is)", credentials.size)
+        return credentials.mapIndexed { index, credential ->
+            DealerSession(
+                id = index + 1,
+                credential = credential,
+                dealerProperties = dealerProperties,
+                browserFactory = browserFactory,
+                loginPage = loginPage,
+                homePage = homePage,
+                mainTabSessionExpiryJob = mainTabSessionExpiryJob,
+            )
+        }
+    }
 
     fun initialize() {
         startSessionExpiryMonitorIfNeeded()
-        runOnBrowserThread {
-            initializeSessionIfNeeded()
+        sessions.forEach { session ->
+            runCatching { session.initialize() }
+                .onFailure { error ->
+                    logger.error("Falha ao inicializar a sessao dealer #{}", session.id, error)
+                }
         }
     }
 
-    fun <T> runInNewTab(action: (HomePage) -> T): T {
-        return runOnBrowserThread {
-            initializeSessionIfNeeded()
+    /**
+     * Pega emprestada uma sessao exclusiva, executa [action] e devolve a sessao ao pool.
+     * Bloqueia enquanto nao houver sessao livre (backpressure).
+     */
+    fun <T> runInSession(action: (HomePage) -> T): T {
+        val session = available.takeFirst()
+        return try {
+            runWithRetry(session, action, attempt = 0)
+        } finally {
+            available.addLast(session)
+        }
+    }
+
+    private fun <T> runWithRetry(session: DealerSession, action: (HomePage) -> T, attempt: Int): T {
+        return try {
+            session.runInTab(action)
+        } catch (error: DealerSessionExpiredException) {
+            if (attempt < MAX_RETRIES) {
+                logger.warn("Sessao #{} expirada; refazendo login e tentando novamente (tentativa {})", session.id, attempt + 1)
+                runCatching { session.refresh() }
+                runWithRetry(session, action, attempt + 1)
+            } else {
+                throw error
+            }
+        } catch (error: StaleDealerReadException) {
+            if (attempt < MAX_RETRIES) {
+                logger.warn("Leitura suja na sessao #{}; repetindo a operacao (tentativa {}): {}", session.id, attempt + 1, error.message)
+                runWithRetry(session, action, attempt + 1)
+            } else {
+                throw error
+            }
+        }
+    }
+
+    private fun startSessionExpiryMonitorIfNeeded() {
+        if (!dealerProperties.sessionExpiryJobEnabled || sessionExpiryMonitorStarted) {
+            return
+        }
+        synchronized(this) {
+            if (sessionExpiryMonitorStarted) {
+                return
+            }
+            sessionExpiryMonitorExecutor.scheduleWithFixedDelay(
+                ::runExpiryJobOnIdleSessions,
+                SESSION_EXPIRY_RUN_INTERVAL.toMillis(),
+                SESSION_EXPIRY_RUN_INTERVAL.toMillis(),
+                TimeUnit.MILLISECONDS,
+            )
+            sessionExpiryMonitorStarted = true
+        }
+    }
+
+    /**
+     * Roda o job de expiracao apenas em sessoes ociosas. Pega cada sessao livre do
+     * pool, executa o job e a devolve, sem bloquear requisicoes em andamento.
+     */
+    private fun runExpiryJobOnIdleSessions() {
+        val visited = mutableSetOf<Int>()
+        while (true) {
+            val session = available.pollFirst() ?: break
+            if (!visited.add(session.id)) {
+                // Demos a volta completa no pool: devolve e para.
+                available.addLast(session)
+                break
+            }
             try {
-                runInSessionTab(dealerProperties.indexUrl, action)
-            } catch (error: DealerSessionExpiredException) {
-                refreshSharedSessionOnBrowserThread()
-                runInSessionTab(dealerProperties.indexUrl, action)
+                session.runExpiryJobIfDue()
+            } catch (_: RuntimeException) {
+            } finally {
+                available.addLast(session)
             }
         }
     }
@@ -86,509 +151,26 @@ class BrowserSessionManager(
     @PreDestroy
     fun shutdown() {
         try {
-            runOnBrowserThread {
-                if (initialized && isSessionAlive()) {
-                    WebDriverRunner.closeWebDriver()
-                }
-                initialized = false
+            sessions.forEach { session ->
+                runCatching { session.shutdown() }
             }
-        } catch (_: RuntimeException) {
         } finally {
             sessionExpiryMonitorExecutor.shutdownNow()
-            sessionExpiryMonitorExecutor.awaitTermination(5, TimeUnit.MINUTES)
-            browserExecutor.shutdownNow()
-            browserExecutor.awaitTermination(5, TimeUnit.MINUTES)
+            sessionExpiryMonitorExecutor.awaitTermination(1, TimeUnit.MINUTES)
         }
-    }
-
-    private fun initializeSessionIfNeeded() {
-        if (initialized && isSessionAlive()) {
-            runSessionExpiryJobOnMainTabIfDue()
-            return
-        }
-
-        discardDeadSessionReference()
-        configureChromeRuntime()
-        Configuration.headless = dealerProperties.headless
-        Configuration.screenshots = dealerProperties.screenshotsEnabled
-        Configuration.savePageSource = dealerProperties.screenshotsEnabled
-        Configuration.browserCapabilities = createChromeOptions()
-        loginPage.login()
-
-        sharedWebDriver = WebDriverRunner.getWebDriver()
-        mainWindowHandle = sharedWebDriver.windowHandle
-        initialized = true
-        resetSessionExpiryJobSchedule(Instant.now())
-        runSessionExpiryJobOnMainTabIfDue()
-    }
-
-    private fun runSessionExpiryJobOnMainTabIfDue() {
-        if (!dealerProperties.sessionExpiryJobEnabled) {
-            return
-        }
-
-        val now = Instant.now()
-        if (now.isBefore(nextSessionExpiryJobRunAt)) {
-            return
-        }
-
-        sharedWebDriver.switchTo().window(mainWindowHandle)
-        sharedWebDriver.switchTo().defaultContent()
-        val handledSessionExpiry = mainTabSessionExpiryJob.run()
-        val requestedDelayReset = mainTabSessionExpiryJob.consumeDelayResetRequest()
-
-        nextSessionExpiryJobRunAt = if (handledSessionExpiry || requestedDelayReset) {
-            now.plus(SESSION_EXPIRY_INITIAL_DELAY)
-        } else {
-            now.plus(SESSION_EXPIRY_RUN_INTERVAL)
-        }
-    }
-
-    private fun resetSessionExpiryJobSchedule(referenceTime: Instant) {
-        nextSessionExpiryJobRunAt = referenceTime.plus(SESSION_EXPIRY_INITIAL_DELAY)
-    }
-
-    private fun startSessionExpiryMonitorIfNeeded() {
-        if (!dealerProperties.sessionExpiryJobEnabled) {
-            return
-        }
-
-        if (sessionExpiryMonitorStarted) {
-            return
-        }
-
-        synchronized(this) {
-            if (sessionExpiryMonitorStarted) {
-                return
-            }
-
-            sessionExpiryMonitorExecutor.scheduleWithFixedDelay(
-                {
-                    try {
-                        runOnBrowserThread {
-                            if (initialized && isSessionAlive()) {
-                                runSessionExpiryJobOnMainTabIfDue()
-                            }
-                        }
-                    } catch (_: RuntimeException) {
-                    }
-                },
-                SESSION_EXPIRY_RUN_INTERVAL.toMillis(),
-                SESSION_EXPIRY_RUN_INTERVAL.toMillis(),
-                TimeUnit.MILLISECONDS,
-            )
-
-            sessionExpiryMonitorStarted = true
-        }
-    }
-
-    private fun isSessionAlive(): Boolean {
-        if (!initialized) {
-            return false
-        }
-
-        val remoteDriver = sharedWebDriver as? RemoteWebDriver ?: return false
-        val sessionId = remoteDriver.sessionId ?: return false
-
-        return try {
-            sessionId.toString().isNotBlank()
-                && sharedWebDriver.windowHandles.contains(mainWindowHandle)
-                && !isMainWindowOnLoginPage()
-        } catch (_: NoSuchSessionException) {
-            false
-        } catch (_: WebDriverException) {
-            false
-        }
-    }
-
-    private fun discardDeadSessionReference() {
-        if (::sharedWebDriver.isInitialized) {
-            try {
-                WebDriverRunner.closeWebDriver()
-            } catch (_: RuntimeException) {
-            }
-        }
-        initialized = false
-    }
-
-    private fun isMainWindowOnLoginPage(): Boolean {
-        val currentWindowHandle = runCatching { sharedWebDriver.windowHandle }.getOrNull()
-        return try {
-            sharedWebDriver.switchTo().window(mainWindowHandle)
-            isLoginPageUrl(sharedWebDriver.currentUrl)
-        } finally {
-            if (currentWindowHandle != null && currentWindowHandle != mainWindowHandle) {
-                runCatching { sharedWebDriver.switchTo().window(currentWindowHandle) }
-            }
-        }
-    }
-
-    private fun <T> runOnBrowserThread(action: () -> T): T {
-        val future = browserExecutor.submit(Callable<T> { action() })
-        return future.get()
-    }
-
-    fun <T> runInClonedStateDriver(path : String  = "", action: (HomePage) -> T): T {
-        return runInClonedStateDriver(path, retriedAfterLoginRedirect = false, action)
-    }
-
-    private fun <T> runInClonedStateDriver(
-        path: String = "",
-        retriedAfterLoginRedirect: Boolean,
-        action: (HomePage) -> T,
-    ): T {
-        val snapshot = runOnBrowserThread {
-            initializeSessionIfNeeded()
-            captureSessionState(path)
-        }
-
-        val copiedProfileDir = copyProfileDirectory(snapshot.userDataDir)
-        val clonedWebDriver = createExperimentalDriver(copiedProfileDir)
-        val clonedSelenideDriver = createSelenideDriver(clonedWebDriver)
-
-        return try {
-            BrowserRuntime.withDriver(clonedSelenideDriver) {
-                clonedSelenideDriver.open(snapshot.bootstrapUrl)
-                restoreSessionState(clonedWebDriver, snapshot)
-                clonedSelenideDriver.open(snapshot.currentUrl)
-                if (isLoginPageUrl(clonedWebDriver.currentUrl)) {
-                    throw DealerSessionExpiredException()
-                }
-                action(homePage)
-            }
-        } catch (error: DealerSessionExpiredException) {
-            if (!retriedAfterLoginRedirect) {
-                refreshSharedSessionFromAnyThread()
-                return runInClonedStateDriver(path, retriedAfterLoginRedirect = true, action)
-            }
-            throw error
-        } catch (error: Throwable) {
-            if (!retriedAfterLoginRedirect && isLoginPageUrl(clonedWebDriver.currentUrl)) {
-                refreshSharedSessionFromAnyThread()
-                return runInClonedStateDriver(path, retriedAfterLoginRedirect = true, action)
-            }
-            BrowserRuntime.withDriver(clonedSelenideDriver) {
-                BrowserDebugArtifacts.captureCurrentContext("cloned-session-failure")
-            }
-            throw error
-        } finally {
-            try {
-                clonedSelenideDriver.close()
-            } catch (_: RuntimeException) {
-            }
-            deleteDirectoryQuietly(copiedProfileDir)
-        }
-    }
-
-    private fun <T> runInSessionTab(targetUrl: String, action: (HomePage) -> T): T {
-        val requestWindowHandle = sharedWebDriver.switchTo().newWindow(WindowType.TAB).windowHandle
-        sharedWebDriver.switchTo().window(requestWindowHandle)
-        sharedWebDriver.switchTo().defaultContent()
-
-        return try {
-            open(targetUrl)
-            if (isLoginPageUrl(sharedWebDriver.currentUrl)) {
-                throw DealerSessionExpiredException()
-            }
-            action(homePage)
-        } finally {
-            try {
-                sharedWebDriver.switchTo().defaultContent()
-                sharedWebDriver.close()
-            } finally {
-                sharedWebDriver.switchTo().window(mainWindowHandle)
-                sharedWebDriver.switchTo().defaultContent()
-            }
-        }
-    }
-
-    private fun captureSessionState(path : String = ""): BrowserSessionSnapshot {
-        val currentUrl = sharedWebDriver.currentUrl ?: dealerProperties.indexUrl
-        if (isLoginPageUrl(currentUrl)) {
-            initialized = false
-            throw DealerSessionExpiredException()
-        }
-        val snapshotUrl = resolveSnapshotUrl(currentUrl, path)
-
-        return BrowserSessionSnapshot(
-            currentUrl = snapshotUrl,
-            bootstrapUrl = resolveBootstrapUrl(snapshotUrl),
-            userDataDir = resolveUserDataDir(sharedWebDriver),
-            cookies = sharedWebDriver.manage().cookies.toSet(),
-            localStorage = captureStorage(sharedWebDriver, "localStorage"),
-            sessionStorage = captureStorage(sharedWebDriver, "sessionStorage"),
-        )
-    }
-
-    private fun resolveSnapshotUrl(currentUrl: String, path: String): String {
-        val baseUrl = currentUrl.ifBlank { dealerProperties.indexUrl }
-        val rawPath = path.trim()
-
-        if (rawPath.isBlank()) {
-            return baseUrl
-        }
-
-        val requestedUri = runCatching { URI(rawPath) }.getOrNull()
-        if (requestedUri?.isAbsolute == true) {
-            return rawPath
-        }
-
-        val baseUri = runCatching { URI(baseUrl) }.getOrNull() ?: return rawPath
-        val normalizedPath = rawPath.takeIf { it.startsWith("/") } ?: "/$rawPath"
-
-        return URI(baseUri.scheme, baseUri.authority, normalizedPath, null, null).toString()
-    }
-
-    private fun createSelenideDriver(webDriver: WebDriver): SelenideDriver {
-        val config = SelenideConfig()
-            .screenshots(dealerProperties.screenshotsEnabled)
-            .savePageSource(dealerProperties.screenshotsEnabled)
-        return SelenideDriver(config, webDriver, null)
-    }
-
-    private fun restoreSessionState(driver: WebDriver, snapshot: BrowserSessionSnapshot) {
-        restoreCookies(driver, snapshot.cookies)
-        restoreStorage(driver, "localStorage", snapshot.localStorage)
-        restoreStorage(driver, "sessionStorage", snapshot.sessionStorage)
-    }
-
-    private fun restoreCookies(driver: WebDriver, cookies: Set<Cookie>) {
-        cookies.forEach { cookie ->
-            try {
-                driver.manage().deleteCookieNamed(cookie.name)
-                driver.manage().addCookie(cookie)
-            } catch (_: RuntimeException) {
-            }
-        }
-    }
-
-    private fun restoreStorage(driver: WebDriver, storageName: String, values: Map<String, String>) {
-        val javascriptExecutor = driver as? JavascriptExecutor ?: return
-        javascriptExecutor.executeScript(
-            """
-            const storage = window[arguments[0]];
-            const values = arguments[1] || {};
-            storage.clear();
-            for (const [key, value] of Object.entries(values)) {
-              storage.setItem(key, value);
-            }
-            """.trimIndent(),
-            storageName,
-            values,
-        )
-    }
-
-    private fun createExperimentalDriver(profileDir: Path): WebDriver {
-        val options = createChromeOptions()
-        options.addArguments("--user-data-dir=${profileDir.toAbsolutePath()}")
-        return ChromeDriver(options)
-    }
-
-    private fun createChromeOptions(): ChromeOptions {
-        val options = ChromeOptions()
-        options.addArguments("--no-sandbox")
-        options.addArguments("--disable-dev-shm-usage")
-        options.addArguments("--disable-gpu")
-
-        resolveChromeBinaryPath()?.let(options::setBinary)
-
-        val chromeDriverPath = resolveChromeDriverPath()
-        if (chromeDriverPath != null) {
-            System.setProperty("webdriver.chrome.driver", chromeDriverPath)
-        }
-
-        if (dealerProperties.headless) {
-            options.addArguments("--headless=new")
-        }
-        if (dealerProperties.fullscreen && !dealerProperties.headless) {
-            options.addArguments("--start-maximized")
-        }
-
-        return options
-    }
-
-    private fun configureChromeRuntime() {
-        resolveChromeDriverPath()?.let {
-            System.setProperty("webdriver.chrome.driver", it)
-        }
-    }
-
-    private fun resolveChromeBinaryPath(): String? {
-        return listOf(
-            "/usr/bin/google-chrome",
-            "/opt/google/chrome/chrome",
-            "/usr/local/bin/chrome",
-            "/usr/lib/chromium/chromium",
-            "/usr/lib/chromium-browser/chromium-browser",
-            System.getenv("CHROME_BIN"),
-            "/usr/bin/chromium",
-            "/usr/bin/chromium-browser",
-        ).firstNotNullOfOrNull(::existingExecutablePathOrNull)
-    }
-
-    private fun resolveChromeDriverPath(): String? {
-        return listOf(
-            "/usr/lib/chromium/chromedriver",
-            "/usr/local/bin/chromedriver",
-            "/usr/bin/chromedriver",
-            System.getenv("CHROMEDRIVER_PATH"),
-        ).firstNotNullOfOrNull(::existingExecutablePathOrNull)
-    }
-
-    private fun existingExecutablePathOrNull(rawPath: String?): String? {
-        val path = rawPath?.trim().orEmpty()
-        if (path.isBlank()) {
-            return null
-        }
-
-        return path.takeIf {
-            val resolvedPath = Path.of(it)
-            resolvedPath.exists() && Files.isRegularFile(resolvedPath) && Files.isExecutable(resolvedPath)
-        }
-    }
-
-    private fun resolveUserDataDir(driver: WebDriver): Path {
-        val remoteDriver = driver as? RemoteWebDriver
-            ?: error("Nao foi possivel obter o profile do WebDriver atual.")
-
-        val chromeCapability = remoteDriver.capabilities.getCapability("chrome") as? Map<*, *>
-        val userDataDir = chromeCapability?.get("userDataDir")?.toString()
-            ?: error("Nao foi possivel localizar chrome.userDataDir nas capabilities do driver.")
-
-        return Path.of(userDataDir)
-    }
-
-    private fun captureStorage(driver: WebDriver, storageName: String): Map<String, String> {
-        val javascriptExecutor = driver as? JavascriptExecutor ?: return emptyMap()
-        val rawStorage = javascriptExecutor.executeScript(
-            """
-            const storage = window[arguments[0]];
-            const values = {};
-            for (let index = 0; index < storage.length; index += 1) {
-              const key = storage.key(index);
-              if (key !== null) {
-                values[key] = storage.getItem(key) ?? '';
-              }
-            }
-            return values;
-            """.trimIndent(),
-            storageName,
-        ) as? Map<*, *> ?: return emptyMap()
-
-        return rawStorage.entries.mapNotNull { (key, value) ->
-            val normalizedKey = key?.toString()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            normalizedKey to (value?.toString() ?: "")
-        }.toMap()
-    }
-
-    private fun copyProfileDirectory(sourceDir: Path): Path {
-        val targetDir = Files.createTempDirectory("dealer-cloned-profile-")
-
-        Files.walk(sourceDir).use { paths ->
-            paths.forEach { sourcePath ->
-                val relativePath = sourceDir.relativize(sourcePath)
-                val targetPath = targetDir.resolve(relativePath.toString())
-
-                if (Files.isDirectory(sourcePath)) {
-                    Files.createDirectories(targetPath)
-                    return@forEach
-                }
-
-                if (!Files.isRegularFile(sourcePath)) {
-                    return@forEach
-                }
-
-                if (isChromeLockArtifact(relativePath)) {
-                    return@forEach
-                }
-
-                try {
-                    Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING)
-                } catch (_: Exception) {
-                }
-            }
-        }
-
-        removeChromeLockArtifacts(targetDir)
-        return targetDir
-    }
-
-    private fun removeChromeLockArtifacts(profileDir: Path) {
-        chromeLockArtifactNames().forEach { fileName ->
-            profileDir.resolve(fileName).deleteIfExists()
-        }
-    }
-
-    private fun deleteDirectoryQuietly(directory: Path) {
-        if (!Files.exists(directory)) {
-            return
-        }
-
-        Files.walk(directory).use { paths ->
-            paths.sorted(Comparator.reverseOrder()).forEach { path ->
-                try {
-                    Files.deleteIfExists(path)
-                } catch (_: Exception) {
-                }
-            }
-        }
-    }
-
-    private fun resolveBootstrapUrl(currentUrl: String): String {
-        val currentUri = runCatching { URI(currentUrl) }.getOrNull() ?: return dealerProperties.indexUrl
-        return URI(currentUri.scheme, currentUri.authority, "/", null, null).toString()
-    }
-
-    private fun refreshSharedSessionFromAnyThread() {
-        runOnBrowserThread {
-            refreshSharedSessionOnBrowserThread()
-        }
-    }
-
-    private fun refreshSharedSessionOnBrowserThread() {
-        discardDeadSessionReference()
-        initializeSessionIfNeeded()
-    }
-
-    private fun isLoginPageUrl(currentUrl: String?): Boolean {
-        return isDealerLoginPageUrl(currentUrl)
-    }
-
-    private class DealerSessionExpiredException : RuntimeException("Dealer session redirected to login page.")
-
-    private data class BrowserSessionSnapshot(
-        val currentUrl: String,
-        val bootstrapUrl: String,
-        val userDataDir: Path,
-        val cookies: Set<Cookie>,
-        val localStorage: Map<String, String>,
-        val sessionStorage: Map<String, String>,
-    )
-
-    private fun chromeLockArtifactNames(): List<String> {
-        return listOf(
-            "SingletonLock",
-            "SingletonSocket",
-            "SingletonCookie",
-            "DevToolsActivePort",
-        )
-    }
-
-    private fun isChromeLockArtifact(relativePath: Path): Boolean {
-        return relativePath.nameCount == 1 && relativePath.fileName.toString() in chromeLockArtifactNames()
     }
 
     companion object {
-        private val SESSION_EXPIRY_INITIAL_DELAY: Duration = Duration.ofSeconds(1)
+        private const val MAX_RETRIES = 2
         private val SESSION_EXPIRY_RUN_INTERVAL: Duration = Duration.ofSeconds(10)
     }
 }
 
-internal fun isDealerLoginPageUrl(currentUrl: String?): Boolean {
-    return DEALER_LOGIN_PAGE_PATTERN.containsMatchIn(currentUrl.orEmpty())
-}
+/** A navegacao do dealer foi redirecionada para a pagina de login. */
+class DealerSessionExpiredException : RuntimeException("Dealer session redirected to login page.")
 
-private val DEALER_LOGIN_PAGE_PATTERN = Regex(
-    pattern = """login(?:aux)?\.aspx""",
-    option = RegexOption.IGNORE_CASE,
-)
+/**
+ * O grid do dealer devolveu um registro diferente do solicitado (leitura suja /
+ * estado de sessao defasado). Dispara nova tentativa na mesma sessao.
+ */
+class StaleDealerReadException(message: String) : RuntimeException(message)
