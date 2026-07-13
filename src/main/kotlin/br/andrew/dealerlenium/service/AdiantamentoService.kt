@@ -8,8 +8,9 @@ import br.andrew.dealerlenium.pages.AspxInputHelper
 import br.andrew.dealerlenium.pages.AuthenticatedPage
 import br.andrew.dealerlenium.pages.FrameSwitcher
 import br.andrew.dealerlenium.pages.NavigationPage
-import com.codeborne.selenide.Condition.visible
 import com.codeborne.selenide.Condition.disappear
+import com.codeborne.selenide.Condition.exist
+import com.codeborne.selenide.Condition.visible
 import org.openqa.selenium.By
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -47,20 +48,14 @@ class AdiantamentoService(
 
             BrowserRuntime.css("#INSERT").shouldBe(visible).click()
             lancamentoPage.waitAjaxLoadingToFinish()
-            BrowserRuntime.css("#vTESOURARIA_TIPOCDCOD")
-                .shouldBe(visible)
-                .selectOptionByValue(adiantamento.tipoCodigo)
+            selectOptionByValueWhenReady("#vTESOURARIA_TIPOCDCOD", adiantamento.tipoCodigo)
             lancamentoPage.waitAjaxLoadingToFinish()
-            BrowserRuntime.css("#vTESOURARIA_TIPODOCUMENTOCOD")
-                .shouldBe(visible)
-                .selectOptionByValue(adiantamento.tipoDocumentoCodigo)
+            selectOptionByValueWhenReady("#vTESOURARIA_TIPODOCUMENTOCOD", adiantamento.tipoDocumentoCodigo)
             lancamentoPage.waitAjaxLoadingToFinish()
             val parametros = transaction.parametros
             val departamentoCod = parametros?.departamentoCod
             if (departamentoCod != null) {
-                BrowserRuntime.css("#CTLTESOURARIA_DEPARTAMENTOCOD")
-                    .shouldBe(visible)
-                    .selectOptionByValue(departamentoCod.toString())
+                selectOptionByValueWhenReady("#CTLTESOURARIA_DEPARTAMENTOCOD", departamentoCod.toString())
             } else {
                 BrowserRuntime.css("#CTLTESOURARIA_DEPARTAMENTOCOD")
                     .shouldBe(visible)
@@ -69,9 +64,7 @@ class AdiantamentoService(
             lancamentoPage.waitAjaxLoadingToFinish()
             val tipoFichaRazaoCod = parametros?.tipoFichaRazaoCod
             if (tipoFichaRazaoCod != null) {
-                BrowserRuntime.css("#vTESOURARIA_TIPOFICHARAZAOCOD")
-                    .shouldBe(visible)
-                    .selectOptionByValue(tipoFichaRazaoCod.toString())
+                selectOptionByValueWhenReady("#vTESOURARIA_TIPOFICHARAZAOCOD", tipoFichaRazaoCod.toString())
             } else {
                 BrowserRuntime.css("#vTESOURARIA_TIPOFICHARAZAOCOD")
                     .shouldBe(visible)
@@ -97,6 +90,12 @@ class AdiantamentoService(
 
             return@runInSession finalizarBaixa(session)
         }
+    }
+
+    private fun selectOptionByValueWhenReady(selector: String, value: String) {
+        val select = BrowserRuntime.css(selector).shouldBe(visible)
+        BrowserRuntime.css("$selector option[value='$value']").shouldBe(exist)
+        select.selectOptionByValue(value)
     }
 
     private fun finalizarBaixa(session: AuthenticatedPage): Int? {

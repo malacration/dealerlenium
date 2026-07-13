@@ -36,6 +36,7 @@ class DealerBrowserFactory(
 
     fun createSelenideDriver(webDriver: WebDriver): SelenideDriver {
         val config = SelenideConfig()
+            .timeout(10_000)
             .screenshots(dealerProperties.screenshotsEnabled)
             .savePageSource(dealerProperties.screenshotsEnabled)
         return SelenideDriver(config, webDriver, null)

@@ -38,6 +38,19 @@ class OpenTransactionSettlementProcessor(
         }
     }
 
+    fun retrySettlement(transactionId: String): PixTransactionConsultationResponse {
+        val lock = transactionLocks.computeIfAbsent(transactionId) { ReentrantLock() }
+        return try {
+            lock.withLock {
+                retrySettlementLocked(transactionId)
+            }
+        } finally {
+            if (!lock.isLocked && !lock.hasQueuedThreads()) {
+                transactionLocks.remove(transactionId, lock)
+            }
+        }
+    }
+
     private fun processLocked(transactionId: String): PixTransactionConsultationResponse {
         val transaction = transactionRepository.findById(transactionId).orElseThrow {
             IllegalArgumentException("Transacao $transactionId nao encontrada")
@@ -53,6 +66,23 @@ class OpenTransactionSettlementProcessor(
         } else {
             processarPagamentoPendente(transaction, pagamento, agora)
         }
+    }
+
+    private fun retrySettlementLocked(transactionId: String): PixTransactionConsultationResponse {
+        val transaction = transactionRepository.findById(transactionId).orElseThrow {
+            IllegalArgumentException("Transacao $transactionId nao encontrada")
+        }
+        require(transaction.status == TransactionStatus.ERRO_BAIXA) {
+            "A transacao $transactionId esta com status ${transaction.status.value}; somente transacoes com status ${TransactionStatus.ERRO_BAIXA.value} podem ter baixa retentada."
+        }
+
+        val agora = Instant.now()
+        val pagamento = pixPagamentoService.consultarPagamentoDaTransacao(transaction)
+        require(pagamento.paid) {
+            "A transacao $transactionId nao possui pagamento confirmado para retentar a baixa."
+        }
+
+        return processarPagamentoConfirmado(transaction, pagamento, agora)
     }
 
     private fun processarPagamentoConfirmado(

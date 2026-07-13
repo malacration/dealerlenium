@@ -16,17 +16,6 @@ import java.util.concurrent.Executors
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/**
- * Regressao para o vazamento de contexto entre buscas concorrentes (Francisco/Sabrina).
- *
- * Dispara buscas concorrentes de dois ids distintos repetidas vezes. Com o pool de
- * sessoes independentes (2 credenciais no profile hmg => pool de tamanho 2), cada
- * busca roda em uma sessao de servidor propria e nao deve receber o registro da outra.
- *
- * Opt-in: requer Chrome + acesso ao Dealer de homologacao. Habilite com
- * `RUN_DEALER_PESSOA_CONCURRENCY_TEST=true` e informe os dois ids de teste em
- * `DEALER_TEST_PESSOA_ID_A` (default 123625) e `DEALER_TEST_PESSOA_ID_B`.
- */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("dealer-e2e-pipeline")
 @Tag("dealer-pessoa-lookup")
