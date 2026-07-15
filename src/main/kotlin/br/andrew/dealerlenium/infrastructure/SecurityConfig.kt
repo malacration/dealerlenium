@@ -1,10 +1,11 @@
 package br.andrew.dealerlenium.infrastructure
 
 import br.andrew.dealerlenium.infrastructure.configurations.KeycloakProperties
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpMethod
-import org.springframework.security.config.Customizer
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
 import org.springframework.security.config.http.SessionCreationPolicy
@@ -23,6 +24,7 @@ import org.springframework.security.web.SecurityFilterChain
 @Configuration
 @EnableWebSecurity
 class SecurityConfig(
+    private val securityProperties: SecurityProperties,
     private val keycloakProperties: KeycloakProperties,
     private val keycloakJwtRolesConverter: KeycloakJwtRolesConverter,
     private val corsConfiguration : CorsConfig
@@ -31,11 +33,23 @@ class SecurityConfig(
     fun securityFilterChain(
         http: HttpSecurity,
     ): SecurityFilterChain {
-        return http
+        val builder = http
             .formLogin { it.disable() }
             .httpBasic { it.disable() }
             .logout { it.disable() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
+
+        if (!securityProperties.authEnabled) {
+            return builder
+                .authorizeHttpRequests { auth ->
+                    auth.anyRequest().permitAll()
+                }
+                .csrf { it.disable() }
+                .cors(corsConfiguration.customizer)
+                .build()
+        }
+
+        return builder
             .authorizeHttpRequests { auth ->
                 auth
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
@@ -55,6 +69,7 @@ class SecurityConfig(
     }
 
     @Bean
+    @ConditionalOnProperty(prefix = "security", name = ["auth-enabled"], havingValue = "true", matchIfMissing = true)
     fun jwtDecoder(): JwtDecoder {
         val decoder = keycloakProperties.jwkSetUri
             ?.takeIf { it.isNotBlank() }
@@ -82,3 +97,8 @@ class SecurityConfig(
         return converter
     }
 }
+
+@ConfigurationProperties(prefix = "security")
+data class SecurityProperties(
+    val authEnabled: Boolean = true,
+)

@@ -16,6 +16,12 @@ Todos os endpoints descritos abaixo exigem:
 Authorization: Bearer <token JWT>
 ```
 
+Para teste local, a autenticacao pode ser desativada completamente com:
+
+```bash
+SECURITY_AUTH_ENABLED=false
+```
+
 O usuario autenticado precisa ter o papel `debug` no Keycloak. O backend aceita
 o papel tanto em `realm_access.roles` quanto em qualquer entrada de
 `resource_access`. A comparacao nao diferencia maiusculas de minusculas.

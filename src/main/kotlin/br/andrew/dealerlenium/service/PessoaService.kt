@@ -51,6 +51,7 @@ class PessoaService(
                     "Grid de pessoas retornou o codigo $codigo para a busca de $idCliente",
                 )
             }
+            throwIfCadastroAlert()
 
             Cliente(
                 codigo = codigo,
@@ -115,4 +116,31 @@ class PessoaService(
     }
 
     private fun gerarTxId(): String = "PIX-${UUID.randomUUID().toString().substring(0, 12).uppercase()}"
+
+    private fun throwIfCadastroAlert() {
+        val statusElement = BrowserRuntime.css(
+            "input[type='image'][id*='vSTATUS'], img[id*='vSTATUS'], " +
+                "input[type='image'][name*='vSTATUS'], img[name*='vSTATUS']"
+        )
+        if (!statusElement.exists()) {
+            return
+        }
+
+        val alertMessage = PessoaGridStatusAlert.messageOrNull(
+            src = statusElement.getAttribute("src"),
+            title = statusElement.getAttribute("title"),
+        ) ?: return
+
+        throw IllegalArgumentException(alertMessage)
+    }
+}
+
+object PessoaGridStatusAlert {
+    fun messageOrNull(src: String?, title: String?): String? {
+        if (!src.orEmpty().contains("IcoAlerta", ignoreCase = true)) {
+            return null
+        }
+
+        return title?.trim()?.takeIf { it.isNotEmpty() } ?: "Pendencias de Cadastro"
+    }
 }
