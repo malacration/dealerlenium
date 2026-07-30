@@ -20,6 +20,7 @@ data class DealerProperties(
     val autoCloseBrowser: Boolean = true,
     val screenshotsEnabled: Boolean = false,
     val fullscreen: Boolean = false,
+    val selenideTimeout: Duration = Duration.ofSeconds(10),
     val flow: List<FlowStep> = listOf(
         FlowStep.LOGIN,
         FlowStep.CONTAS_RECEBER,
