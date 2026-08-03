@@ -54,7 +54,8 @@ class SecurityConfig(
                 auth
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                     .requestMatchers("/", "/health").permitAll()
-                    .requestMatchers("/api/debug/**").hasAuthority("DEBUG")
+                    .requestMatchers("/api/debug/**").hasAnyAuthority("DEBUG", "ADMIN")
+                    .requestMatchers(HttpMethod.POST, "/api/transactions/*/retry-settlement").hasAuthority("ADMIN")
                     .requestMatchers(HttpMethod.POST, "/pix/share/verify").permitAll()
                     .anyRequest().authenticated()
             }

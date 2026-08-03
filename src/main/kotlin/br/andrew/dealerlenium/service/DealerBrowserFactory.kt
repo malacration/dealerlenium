@@ -39,6 +39,7 @@ class DealerBrowserFactory(
             .timeout(dealerProperties.selenideTimeout.toMillis())
             .screenshots(dealerProperties.screenshotsEnabled)
             .savePageSource(dealerProperties.screenshotsEnabled)
+            .reportsFolder("build/reports/dealer-debug")
         return SelenideDriver(config, webDriver, null)
     }
 
@@ -56,6 +57,10 @@ class DealerBrowserFactory(
 
         if (dealerProperties.headless) {
             options.addArguments("--headless=new")
+            // --start-maximized nao tem efeito confiavel em modo headless; sem isso a janela
+            // fica no tamanho padrao (pequeno), o que faz o layout responsivo do GeneXus
+            // renderizar campos diferentes (ou nenhum) em relacao ao modo headed maximizado.
+            options.addArguments("--window-size=1920,1080")
         }
         if (dealerProperties.fullscreen && !dealerProperties.headless) {
             options.addArguments("--start-maximized")

@@ -1,5 +1,7 @@
 package br.andrew.dealerlenium.browser
 
+import org.openqa.selenium.OutputType
+import org.openqa.selenium.TakesScreenshot
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
@@ -21,6 +23,7 @@ object BrowserDebugArtifacts {
             val filePrefix = "${timestampFormatter.format(Instant.now())}-${sanitizeLabel(label)}"
             val metadataPath = outputDir.resolve("$filePrefix.txt")
             val htmlPath = outputDir.resolve("$filePrefix.html")
+            val screenshotPath = outputDir.resolve("$filePrefix.png")
 
             val diagnostic = collectDiagnosticData()
             Files.writeString(
@@ -43,11 +46,30 @@ object BrowserDebugArtifacts {
                 )
             }
 
+            captureScreenshot(screenshotPath)
+
             logger.error("Diagnostico do navegador salvo em {}", metadataPath.toAbsolutePath())
             metadataPath
         }.onFailure { error ->
             logger.error("Falha ao capturar diagnostico do navegador para {}", label, error)
         }.getOrNull()
+    }
+
+    private fun captureScreenshot(screenshotPath: Path) {
+        runCatching {
+            val driver = BrowserRuntime.getWebDriver() as? TakesScreenshot
+                ?: error("Driver atual nao suporta TakesScreenshot")
+            val bytes = driver.getScreenshotAs(OutputType.BYTES)
+            Files.write(
+                screenshotPath,
+                bytes,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING,
+                StandardOpenOption.WRITE,
+            )
+        }.onFailure { error ->
+            logger.warn("Falha ao capturar screenshot em {}", screenshotPath.toAbsolutePath(), error)
+        }
     }
 
     private fun collectDiagnosticData(): BrowserDiagnosticData {

@@ -16,6 +16,7 @@ services:
       DEALER_FULLSCREEN: "false"
       DEALER_SESSION_EXPIRY_JOB_ENABLED: "false"
       DEALER_AUTO_CLOSE_BROWSER: "false"
+      DEALER_SCREENSHOTS_ENABLED: "true"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     shm_size: "2gb"
