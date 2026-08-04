@@ -96,11 +96,11 @@ class AdiantamentoService(
         AspxInputHelper.setMoney("#vTESOURARIA_VALOR", pagamento.valor ?: throw Exception("Não tem valor no pagamento"))
 
         BrowserRuntime.css("#CTLTESOURARIA_NRODOCUMENTO")
-            .takeIf { it.exists() }
+            .takeIf { it.exists() && it.isDisplayed }
             ?.setValue(transaction.reference.substring(0,14))
 
         BrowserRuntime.css("#CTLTESOURARIA_NSU")
-            .takeIf { it.exists() } //se existe e esta ativo e visivel
+            .takeIf { it.exists() && it.isDisplayed }
             ?.setValue(transaction.reference.substring(0,14))
 
         return finalizarBaixa(session)
