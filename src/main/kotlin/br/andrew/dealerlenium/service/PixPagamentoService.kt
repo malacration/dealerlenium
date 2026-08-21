@@ -6,6 +6,7 @@ import br.andrew.dealerlenium.model.PixShareVerificationRequest
 import br.andrew.dealerlenium.model.PixTransactionConsultationResponse
 import br.andrew.dealerlenium.model.TransactionDocument
 import br.andrew.dealerlenium.model.TipoTransacao
+import br.andrew.dealerlenium.model.TransactionStatus
 import br.andrew.dealerlenium.pages.ContasReceberRegistro
 import br.andrew.dealerlenium.repositorys.TransactionRepository
 import org.springframework.stereotype.Service
@@ -71,6 +72,9 @@ class PixPagamentoService(
             ?: throw IllegalArgumentException("Nao foi possivel confirmar a transacao PIX informada.")
 
         validateSharedPayment(request, transaction)
+        if (transaction.status != TransactionStatus.CRIADO) {
+            return consultarEstadoLocal(transaction)
+        }
         val providerStatus = uzziPixService.verifica(transaction.empresa, transaction.reference)
 
         return PixTransactionConsultationResponse.from(transaction, providerStatus, resolveNomeFavorecido(transaction))
@@ -83,10 +87,21 @@ class PixPagamentoService(
         return consultarPagamentoDaTransacao(transaction)
     }
 
-    fun consultarPagamentoDaTransacao(transaction: TransactionDocument): PixTransactionConsultationResponse {
-        val providerStatus = uzziPixService.verifica(transaction.empresa, transaction.reference)
+    fun consultarPagamentoDaTransacao(
+        transaction: TransactionDocument,
+        ignorarCache: Boolean = false,
+    ): PixTransactionConsultationResponse {
+        val providerStatus = uzziPixService.verifica(transaction.empresa, transaction.reference, ignorarCache)
 
         return PixTransactionConsultationResponse.from(transaction, providerStatus, resolveNomeFavorecido(transaction))
+    }
+
+    /**
+     * Responde com o que ja esta persistido, sem consultar o PSP.
+     * Usada para transacoes que nao mudam mais de estado (paga, expirada ou com erro na baixa).
+     */
+    fun consultarEstadoLocal(transaction: TransactionDocument): PixTransactionConsultationResponse {
+        return PixTransactionConsultationResponse.fromPersistido(transaction, resolveNomeFavorecido(transaction))
     }
 
     private fun buscarPixValido(idLancamento: Int) = transactionRepository

@@ -101,4 +101,12 @@ data class TransactionMonitoringProperties(
         TipoTransacao.ADIANTAMENTO to Duration.ofMinutes(5),
         TipoTransacao.CONTAS_RECEBER to Duration.ofHours(1),
     ),
+    /** Quantas transacoes sao processadas por ciclo do monitoramento. */
+    val batchSize: Int = 20,
+    /** Pausa entre as consultas de um mesmo ciclo, para nao disparar rajada no PSP. */
+    val spacing: Duration = Duration.ofMillis(250),
+    /** Desvio aleatorio somado ao reagendamento, para dessincronizar transacoes criadas em lote. */
+    val jitter: Duration = Duration.ofSeconds(30),
+    /** Teto do backoff aplicado depois de falhas consecutivas na consulta. */
+    val maxCheckInterval: Duration = Duration.ofMinutes(30),
 )

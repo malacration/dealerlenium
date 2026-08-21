@@ -7,6 +7,8 @@ import br.andrew.dealerlenium.service.TransactionMonitoringPolicy
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
 import org.slf4j.LoggerFactory
+import org.springframework.data.domain.PageRequest
+import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
 import java.time.Instant
 import java.util.concurrent.Executors
@@ -19,6 +21,7 @@ class OpenTransactionSettlementScheduler(
     private val monitoringPolicy: TransactionMonitoringPolicy,
     private val transactionRepository: TransactionRepository,
     private val settlementProcessor: OpenTransactionSettlementProcessor,
+    private val sleeper: Sleeper,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
     private val executor: ScheduledExecutorService =
@@ -54,27 +57,41 @@ class OpenTransactionSettlementScheduler(
         executor.awaitTermination(1, TimeUnit.MINUTES)
     }
 
-    private fun processarTransacoesAbertas() {
+    internal fun processarTransacoesAbertas() {
         val agora = Instant.now()
+        val monitoring = dealerProperties.transactionMonitoring
 
         runCatching {
-            transactionRepository
-                .findOpenTransactionsReadyForMonitoring(agora)
-                .forEach { transaction ->
-                    val transactionId = transaction.id
-                    if (transactionId == null) {
-                        logger.warn("Transacao sem id ignorada: txId={}", transaction.txId)
-                        return@forEach
-                    }
+            val lote = transactionRepository.findOpenTransactionsReadyForMonitoring(
+                agora,
+                PageRequest.of(0, monitoring.batchSize, Sort.by(Sort.Direction.ASC, "proximaVerificacaoEm")),
+            )
 
-                    runCatching {
-                        settlementProcessor.process(transactionId)
-                    }.onFailure { error ->
-                        logger.error("Falha ao monitorar transacao {}", transactionId, error)
-                    }
+            for ((indice, transaction) in lote.withIndex()) {
+                val transactionId = transaction.id
+                if (transactionId == null) {
+                    logger.warn("Transacao sem id ignorada: txId={}", transaction.txId)
+                    continue
                 }
+
+                // Espacar as consultas evita a rajada que faz o PSP responder 429.
+                if (indice > 0) {
+                    sleeper.sleep(monitoring.spacing)
+                }
+
+                runCatching {
+                    settlementProcessor.process(transactionId)
+                }.onFailure { error ->
+                    logger.error("Falha ao monitorar transacao {}", transactionId, error)
+                }
+            }
         }.onFailure { error ->
-            logger.error("Falha ao listar transacoes abertas para monitoramento", error)
+            if (error is InterruptedException) {
+                Thread.currentThread().interrupt()
+                logger.warn("Ciclo de monitoramento interrompido")
+            } else {
+                logger.error("Falha ao listar transacoes abertas para monitoramento", error)
+            }
         }
     }
 }

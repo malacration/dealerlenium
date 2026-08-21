@@ -5,24 +5,38 @@ import br.andrew.dealerlenium.infrastructure.configurations.UzziPixProperties
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.annotation.JsonAlias
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import org.slf4j.LoggerFactory
+import org.springframework.http.HttpHeaders
+import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Service
 import org.springframework.web.client.RestClient
 import org.springframework.web.client.RestClientException
 import org.springframework.web.client.RestClientResponseException
 import java.math.BigDecimal
+import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.OffsetDateTime
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.util.concurrent.ConcurrentHashMap
 
 @Service
 class UzziPixService(
     private val properties: UzziPixProperties,
     private val empresaProperties: EmpresaProperties,
+    private val statusCache: PixStatusCache,
+    private val clock: Clock,
     restClientBuilder: RestClient.Builder,
 ) {
+    private val logger = LoggerFactory.getLogger(javaClass)
     private val restClient = restClientBuilder
         .baseUrl(properties.baseUrl)
         .build()
+
+    /** Enquanto o PSP estiver recusando as consultas de um CNPJ, nem abrimos conexao. */
+    private val bloqueadoAte = ConcurrentHashMap<String, Instant>()
 
     fun createPixByEmpresa(
         empresa: String,
@@ -45,6 +59,7 @@ class UzziPixService(
                 .body(DataRetonroPixQrCode::class.java)
                 ?: throw IllegalStateException("UzziPix retornou resposta vazia")
         } catch (ex: RestClientResponseException) {
+            lancarSeLimiteDeRequisicoes(request.cnpj, ex)
             throw IllegalStateException(
                 "Falha ao criar PIX no UzziPix. Status=${ex.statusCode.value()} body=${ex.responseBodyAsString}",
                 ex,
@@ -54,8 +69,28 @@ class UzziPixService(
         }
     }
 
-    fun verifica(empresa: String, reference: String): UzziPixTransactionStatus {
+    /**
+     * Consulta o status da transacao no PSP.
+     *
+     * O resultado passa por um cache de curta duracao: refreshes seguidos da tela e chamadas
+     * concorrentes da mesma transacao nao viram varias idas ao banco. Quando a consulta falha e
+     * existe um valor anterior, ele e devolvido marcado como desatualizado.
+     */
+    fun verifica(empresa: String, reference: String, ignorarCache: Boolean = false): UzziPixTransactionStatus {
         val cnpj = empresaProperties.getCnpjByEmpresa(empresa)
+        return statusCache.obter("$cnpj|$reference", ignorarCache) {
+            consultarNoProvedor(cnpj, reference)
+        }
+    }
+
+    private fun consultarNoProvedor(cnpj: String, reference: String): UzziPixTransactionStatus {
+        bloqueioAtivo(cnpj)?.let { restante ->
+            throw PixProviderRateLimitException(
+                retryAfter = restante,
+                message = "O banco esta limitando as consultas do CNPJ $cnpj no momento.",
+            )
+        }
+
         try {
             val response = restClient.get()
                 .uri("cnpj/${cnpj}/transaction/${reference}")
@@ -63,8 +98,9 @@ class UzziPixService(
                 .body(JsonNode::class.java)
                 ?: throw IllegalStateException("UzziPix retornou resposta vazia")
 
-            return response.toTransactionStatus()
+            return response.toTransactionStatus().copy(consultadoEm = clock.instant())
         } catch (ex: RestClientResponseException) {
+            lancarSeLimiteDeRequisicoes(cnpj, ex)
             throw IllegalStateException(
                 "Falha ao consultar PIX no UzziPix. Status=${ex.statusCode.value()} body=${ex.responseBodyAsString}",
                 ex,
@@ -74,6 +110,48 @@ class UzziPixService(
         }
     }
 
+    private fun lancarSeLimiteDeRequisicoes(cnpj: String, ex: RestClientResponseException) {
+        if (ex.statusCode.value() != HttpStatus.TOO_MANY_REQUESTS.value()) {
+            return
+        }
+
+        val retryAfter = parseRetryAfter(ex.responseHeaders) ?: properties.bloqueioPadraoAposExcesso
+        val liberadoEm = clock.instant().plus(retryAfter)
+        bloqueadoAte[cnpj] = liberadoEm
+        logger.warn(
+            "PSP recusou consulta do CNPJ {} por excesso de requisicoes; novas consultas so a partir de {}",
+            cnpj,
+            liberadoEm,
+        )
+        throw PixProviderRateLimitException(retryAfter, cause = ex)
+    }
+
+    private fun bloqueioAtivo(cnpj: String): Duration? {
+        val liberadoEm = bloqueadoAte[cnpj] ?: return null
+        val agora = clock.instant()
+        if (!agora.isBefore(liberadoEm)) {
+            bloqueadoAte.remove(cnpj, liberadoEm)
+            return null
+        }
+        return Duration.between(agora, liberadoEm)
+    }
+
+    private fun parseRetryAfter(headers: HttpHeaders?): Duration? {
+        val valor = headers?.getFirst(HttpHeaders.RETRY_AFTER)?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+
+        val segundos = valor.toLongOrNull()
+            ?: runCatching {
+                Duration.between(
+                    clock.instant(),
+                    ZonedDateTime.parse(valor, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant(),
+                ).seconds
+            }.getOrNull()
+            ?: return null
+
+        return segundos
+            .coerceIn(0, properties.bloqueioMaximoAposExcesso.seconds)
+            .let { Duration.ofSeconds(it) }
+    }
 }
 
 data class UzziPixTransactionStatus(
@@ -84,6 +162,10 @@ data class UzziPixTransactionStatus(
     val paymentType: String? = null,
     val receivedAmount: BigDecimal? = null,
     val status: String? = null,
+    /** Quando o status foi efetivamente lido do PSP. */
+    val consultadoEm: Instant? = null,
+    /** true quando o valor veio do cache por falha na consulta ao PSP. */
+    val desatualizado: Boolean = false,
 ) {
     fun resolvedPaid(): Boolean? {
         paid?.let { return it }

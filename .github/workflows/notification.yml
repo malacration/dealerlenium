@@ -1,0 +1,33 @@
+name: Release Notifier Action
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  notification:
+    runs-on: ubuntu-latest
+    # Sem lista de destinatarios configurada o envio falha; assim o job aparece
+    # como pulado em vez de deixar a release vermelha.
+    if: vars.MAIL_TO_LIST != '' || vars.MAIL_TO_LIST_CCO != ''
+    steps:
+      # O payload do evento release ja traz tag_name e body, entao nao precisa
+      # de checkout nem de action pra buscar a release.
+      - name: Send mail
+        uses: dawidd6/action-send-mail@v18
+        with:
+          server_address: ${{secrets.MAIL_SMTP_ADDRESS}}
+          server_port: ${{secrets.MAIL_PORT}}
+          username: ${{secrets.SMTP_USERNAME}}
+          password: ${{secrets.MAIL_PASSWORD}}
+          subject: Release notes - Dealerlenium versão ${{ github.event.release.tag_name }}
+          to: ${{vars.MAIL_TO_LIST}}
+          bcc: ${{vars.MAIL_TO_LIST_CCO}}
+          from: ${{vars.FROM_MAIL}}
+          html_body: ${{ github.event.release.body }}
+          reply_to: ${{vars.FROM_MAIL}}
+          convert_markdown: true
+          priority: low

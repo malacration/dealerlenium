@@ -7,7 +7,6 @@ import br.andrew.dealerlenium.model.TransactionStatus
 import br.andrew.dealerlenium.repositorys.TransactionRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
-import java.math.BigDecimal
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
@@ -56,15 +55,57 @@ class OpenTransactionSettlementProcessor(
             IllegalArgumentException("Transacao $transactionId nao encontrada")
         }
         if (transaction.status != TransactionStatus.CRIADO) {
-            return pixPagamentoService.consultarPagamentoDaTransacao(transaction)
+            return pixPagamentoService.consultarEstadoLocal(transaction)
         }
         val agora = Instant.now()
-        val pagamento = pixPagamentoService.consultarPagamentoDaTransacao(transactionId)
+        val pagamento = try {
+            pixPagamentoService.consultarPagamentoDaTransacao(transaction)
+        } catch (error: Throwable) {
+            registrarFalhaDeConsulta(transaction, agora, error)
+            throw error
+        }
+
+        if (pagamento.consultaDesatualizada) {
+            // Dado veio do cache porque o PSP recusou a consulta: nao da para transicionar
+            // estado (nem disparar baixa) com base nele.
+            logger.warn("Consulta desatualizada do PSP para a transacao {}; estado nao sera alterado", transactionId)
+            registrarFalhaDeConsulta(transaction, agora, null)
+            return pagamento
+        }
 
         return if (pagamento.paid) {
             processarPagamentoConfirmado(transaction, pagamento, agora)
         } else {
             processarPagamentoPendente(transaction, pagamento, agora)
+        }
+    }
+
+    /**
+     * Reagenda a transacao com backoff quando a consulta ao PSP falha.
+     * Sem isso ela continua elegivel no ciclo seguinte e o backlog cresce a cada erro.
+     */
+    private fun registrarFalhaDeConsulta(
+        transaction: TransactionDocument,
+        agora: Instant,
+        error: Throwable?,
+    ) {
+        val tentativas = transaction.tentativasConsulta + 1
+        runCatching {
+            transactionRepository.save(
+                transaction.copy(
+                    ultimaVerificacaoEm = agora,
+                    tentativasConsulta = tentativas,
+                    proximaVerificacaoEm = monitoringPolicy.proximaExecucaoAposFalha(
+                        transaction.tipoTransacao,
+                        tentativas,
+                        agora,
+                    ),
+                    ultimaFalhaProcessamento = error?.let { resolveFailureMessage(it) }
+                        ?: "Consulta ao PSP indisponivel; status desatualizado",
+                ),
+            )
+        }.onFailure { falha ->
+            logger.error("Falha ao reagendar a transacao {}", transaction.id ?: transaction.txId, falha)
         }
     }
 
@@ -77,7 +118,10 @@ class OpenTransactionSettlementProcessor(
         }
 
         val agora = Instant.now()
-        val pagamento = pixPagamentoService.consultarPagamentoDaTransacao(transaction)
+        val pagamento = pixPagamentoService.consultarPagamentoDaTransacao(transaction, ignorarCache = true)
+        check(!pagamento.consultaDesatualizada) {
+            "Nao foi possivel confirmar o pagamento da transacao $transactionId com o banco no momento. Tente novamente em instantes."
+        }
         require(pagamento.paid) {
             "A transacao $transactionId nao possui pagamento confirmado para retentar a baixa."
         }
@@ -102,6 +146,7 @@ class OpenTransactionSettlementProcessor(
                     encerradaEm = agora,
                     proximaVerificacaoEm = null,
                     ultimaFalhaProcessamento = null,
+                    tentativasConsulta = 0,
                 ),
             )
             pagamento
@@ -136,6 +181,7 @@ class OpenTransactionSettlementProcessor(
                 proximaVerificacaoEm = if (expirado) null else monitoringPolicy.proximaExecucao(transaction.tipoTransacao, agora),
                 encerradaEm = if (expirado) agora else null,
                 ultimaFalhaProcessamento = null,
+                tentativasConsulta = 0,
             ),
         )
 

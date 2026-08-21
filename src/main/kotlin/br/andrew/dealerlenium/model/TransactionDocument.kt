@@ -2,6 +2,8 @@ package br.andrew.dealerlenium.model
 
 import br.andrew.dealerlenium.pages.ContasReceberRegistro
 import org.springframework.data.annotation.Id
+import org.springframework.data.mongodb.core.index.CompoundIndex
+import org.springframework.data.mongodb.core.index.Indexed
 import org.springframework.data.mongodb.core.mapping.Document
 import org.springframework.data.mongodb.core.mapping.Field
 import java.math.BigDecimal
@@ -9,11 +11,17 @@ import java.time.Instant
 import java.time.format.DateTimeFormatter
 
 @Document(collection = "transaction")
+@CompoundIndex(
+    name = "idx_status_proxima_verificacao",
+    def = "{'status': 1, 'proximaVerificacaoEm': 1}",
+)
 data class TransactionDocument(
     @Id
     val id: String? = null,
+    @Indexed
     val idLancamento: Int,
     val tipoTransacao: TipoTransacao = TipoTransacao.CONTAS_RECEBER,
+    @Indexed
     val txId: String,
     val reference: String,
     val empresa: String,
@@ -44,6 +52,8 @@ data class TransactionDocument(
     val idBaixa: Int? = null,
     val encerradaEm: Instant? = null,
     val ultimaFalhaProcessamento: String? = null,
+    /** Falhas consecutivas ao consultar o PSP; alimenta o backoff do monitoramento. */
+    val tentativasConsulta: Int = 0,
 ) {
     constructor(
         pixPagamentoResponse: PixPagamentoResponse,

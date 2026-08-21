@@ -2,7 +2,9 @@ package br.andrew.dealerlenium.infrastructure
 
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.ConstraintViolationException
+import br.andrew.dealerlenium.service.PixProviderRateLimitException
 import org.openqa.selenium.WebDriverException
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.MethodArgumentNotValidException
@@ -65,6 +67,22 @@ class ApiExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, ex.message ?: "Argumento invalido.", request.requestURI, ex)
     }
 
+    @ExceptionHandler(PixProviderRateLimitException::class)
+    fun handleProviderRateLimit(
+        ex: PixProviderRateLimitException,
+        request: HttpServletRequest,
+    ): ResponseEntity<ApiErrorResponse> {
+        val headers = HttpHeaders()
+        ex.retryAfter?.let { headers.set(HttpHeaders.RETRY_AFTER, it.seconds.coerceAtLeast(1).toString()) }
+        return build(
+            HttpStatus.TOO_MANY_REQUESTS,
+            "Estamos consultando o banco no momento. Aguarde alguns instantes e tente novamente.",
+            request.requestURI,
+            ex,
+            headers,
+        )
+    }
+
     @ExceptionHandler(ResponseStatusException::class)
     fun handleResponseStatus(
         ex: ResponseStatusException,
@@ -105,13 +123,14 @@ class ApiExceptionHandler {
         message: String,
         path: String,
         ex: Exception,
+        headers: HttpHeaders = HttpHeaders(),
     ): ResponseEntity<ApiErrorResponse> {
         if (status.is5xxServerError) {
             logger.error("API error {} on {}: {}", status.value(), path, message, ex)
         } else {
             logger.warn("API error {} on {}: {}", status.value(), path, message, ex)
         }
-        return ResponseEntity.status(status).body(
+        return ResponseEntity.status(status).headers(headers).body(
             ApiErrorResponse(
                 status = status.value(),
                 error = status.reasonPhrase,

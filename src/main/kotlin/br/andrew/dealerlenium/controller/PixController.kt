@@ -3,12 +3,14 @@ package br.andrew.dealerlenium.controller
 import br.andrew.dealerlenium.model.PixPagamentoResponse
 import br.andrew.dealerlenium.model.PixShareVerificationRequest
 import br.andrew.dealerlenium.model.PixTransactionConsultationResponse
+import br.andrew.dealerlenium.model.TransactionStatus
 import br.andrew.dealerlenium.repositorys.TransactionRepository
 import br.andrew.dealerlenium.service.OpenTransactionSettlementProcessor
 import br.andrew.dealerlenium.service.PessoaService
 import br.andrew.dealerlenium.service.PixPagamentoService
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Positive
+import org.springframework.http.HttpStatus
 import org.springframework.validation.annotation.Validated
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.server.ResponseStatusException
 import java.math.BigDecimal
 import java.time.Instant
 
@@ -52,9 +55,13 @@ class PixController(
     fun getTransaction(
         @PathVariable id: String
     ): PixTransactionConsultationResponse{
-        val transactionDocument = repository.findById(id).orElseThrow { throw Exception("Adiantamento não foi encontrado") }
-        return if (transactionDocument.encerradaEm != null && transactionDocument.baixaRealizadaEm != null) {
-            pixPagamentoService.consultarPagamentoDaTransacao(transactionDocument)
+        val transactionDocument = repository.findById(id).orElseThrow {
+            ResponseStatusException(HttpStatus.NOT_FOUND, "Adiantamento nao foi encontrado")
+        }
+        // Transacao que nao esta mais em aberto nao muda de estado: responder do banco local
+        // evita uma ida ao PSP a cada abertura da tela.
+        return if (transactionDocument.status != TransactionStatus.CRIADO) {
+            pixPagamentoService.consultarEstadoLocal(transactionDocument)
         } else {
             openTransactionSettlementProcessor.process(id)
         }

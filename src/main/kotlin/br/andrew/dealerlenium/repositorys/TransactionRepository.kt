@@ -1,6 +1,7 @@
 package br.andrew.dealerlenium.repositorys
 
 import br.andrew.dealerlenium.model.TransactionDocument
+import org.springframework.data.domain.Pageable
 import org.springframework.data.mongodb.repository.MongoRepository
 import org.springframework.data.mongodb.repository.Query
 import org.springframework.stereotype.Repository
@@ -14,6 +15,7 @@ interface TransactionRepository : MongoRepository<TransactionDocument, String> {
     @Query("{ 'status': 'Criado', '\$or': [ { 'proximaVerificacaoEm': null }, { 'proximaVerificacaoEm': { '\$lte': ?0 } } ] }")
     fun findOpenTransactionsReadyForMonitoring(
         proximaVerificacaoEm: Instant,
+        pageable: Pageable,
     ): List<TransactionDocument>
     fun findFirstByTxIdOrderByCreatedAtDesc(txId: String): TransactionDocument?
     fun findFirstByIdLancamentoAndPixExpiraEmAfterOrderByCreatedAtDesc(

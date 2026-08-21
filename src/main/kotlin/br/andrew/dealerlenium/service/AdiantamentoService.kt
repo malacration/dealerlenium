@@ -2,6 +2,7 @@ package br.andrew.dealerlenium.service
 
 import br.andrew.dealerlenium.browser.BrowserDebugArtifacts
 import br.andrew.dealerlenium.browser.BrowserRuntime
+import br.andrew.dealerlenium.infrastructure.configurations.Empresa
 import br.andrew.dealerlenium.infrastructure.configurations.EmpresaProperties
 import br.andrew.dealerlenium.model.PixTransactionConsultationResponse
 import br.andrew.dealerlenium.model.TransactionDocument
@@ -11,10 +12,12 @@ import br.andrew.dealerlenium.pages.FrameSwitcher
 import br.andrew.dealerlenium.pages.NavigationPage
 import com.codeborne.selenide.Condition.disappear
 import com.codeborne.selenide.Condition.exist
+import com.codeborne.selenide.Condition.value
 import com.codeborne.selenide.Condition.visible
 import org.openqa.selenium.By
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import java.text.Normalizer
 import java.time.ZoneId
 
 @Service
@@ -52,6 +55,9 @@ class AdiantamentoService(
 
         BrowserRuntime.css("#IMAGECGIDENTIFICADOR").shouldBe(visible).click()
         frameSwitcher.switchToFrameBySrc("sel_contagerencialidentificadorporempresa.aspx")
+
+        selecionarEmpresaNoFiltro(empresa, lancamentoPage)
+
         BrowserRuntime.css("#vFILTRO_CONTAGERENCIAL_IDENTIFICADOR")
             .shouldBe(visible)
             .setValue(adiantamento.contaGerencialIdentificador)
@@ -104,6 +110,37 @@ class AdiantamentoService(
             ?.setValue(transaction.reference.substring(0,14))
 
         return finalizarBaixa(session)
+    }
+
+    private fun selecionarEmpresaNoFiltro(empresa: Empresa, lancamentoPage: AuthenticatedPage) {
+        val filtroEmpresa = BrowserRuntime.css("#vFILTRO_EMPRESACOD").shouldBe(visible)
+        val nomeEsperado = normalizarNomeEmpresa(empresa.id)
+        val opcao = filtroEmpresa.options
+            .firstOrNull { normalizarNomeEmpresa(it.text) == nomeEsperado }
+            ?: throw IllegalStateException(
+                "Empresa '${empresa.id}' nao foi encontrada no filtro de empresas (#vFILTRO_EMPRESACOD) da tela de conta gerencial",
+            )
+
+        if (opcao.isSelected) {
+            logger.debug("Filtro de empresa ja esta com a filial {} selecionada", empresa.id)
+            return
+        }
+
+        val valor = opcao.attr("value")
+            ?: throw IllegalStateException("Opcao da empresa '${empresa.id}' nao possui value em #vFILTRO_EMPRESACOD")
+        logger.info("Ajustando filtro de empresa da conta gerencial para {} (value={})", empresa.id, valor)
+        filtroEmpresa.selectOptionByValue(valor)
+        lancamentoPage.waitAjaxLoadingToFinish()
+        BrowserRuntime.css("#vFILTRO_EMPRESACOD")
+            .shouldBe(visible)
+            .shouldHave(value(valor))
+    }
+
+    private fun normalizarNomeEmpresa(nome: String): String {
+        return Normalizer.normalize(nome, Normalizer.Form.NFD)
+            .replace("\\p{M}".toRegex(), "")
+            .uppercase()
+            .replace("[^A-Z0-9]".toRegex(), "")
     }
 
     private fun selectOptionByValueWhenReady(selector: String, value: String) {
