@@ -10,8 +10,7 @@ class TituloConsultaService(
     private val navigationPage: NavigationPage,
 ) {
     fun buscarValorTitulo(empresa: String, idTitulo: Int): ContasReceberRegistro {
-        println("buscando ")
-        return browserSessionManager.runInSession { homePage ->
+        return browserSessionManager.runInSession(empresa) { homePage ->
             val contasReceberPage = navigationPage.goContasReceber(homePage)
             contasReceberPage.filtroEmpresa(empresa)
             contasReceberPage.getContasReceberByCodigo(idTitulo)

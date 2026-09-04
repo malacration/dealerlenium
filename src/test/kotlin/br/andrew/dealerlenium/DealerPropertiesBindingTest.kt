@@ -23,6 +23,33 @@ class DealerPropertiesBindingTest {
         assertEquals(Duration.ofSeconds(10), properties.selenideTimeout)
     }
 
+    @Test
+    fun `binds the branch scope of each credential`() {
+        val properties = bindDealerProperties(
+            "dealer.credentials[0].username" to "GERAL",
+            "dealer.credentials[0].password" to "senha",
+            "dealer.credentials[1].username" to "DEDICADA",
+            "dealer.credentials[1].password" to "senha",
+            "dealer.credentials[1].empresa" to "AUTOVEMA_PVH",
+        )
+
+        val credenciais = properties.resolveCredentials()
+
+        assertEquals(2, credenciais.size)
+        assertEquals("", credenciais[0].empresa)
+        assertEquals("AUTOVEMA_PVH", credenciais[1].empresa)
+    }
+
+    @Test
+    fun `credential without branch falls back to the general pool`() {
+        val properties = bindDealerProperties(
+            "dealer.username" to "UNICA",
+            "dealer.password" to "senha",
+        )
+
+        assertEquals("", properties.resolveCredentials().single().empresa)
+    }
+
     private fun bindDealerProperties(vararg extraProperties: Pair<String, String>): DealerProperties {
         val environment = MockEnvironment()
             .withProperty("dealer.login-url", "https://dealer.example/LoginAux.aspx")

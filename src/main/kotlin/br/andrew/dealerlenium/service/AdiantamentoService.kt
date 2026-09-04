@@ -30,7 +30,7 @@ class AdiantamentoService(
     private val logger = LoggerFactory.getLogger(javaClass)
 
     fun baixaAdiantamento(transaction: TransactionDocument, pagamento: PixTransactionConsultationResponse): Int? {
-        return browserSessionManager.runInSession { session ->
+        return browserSessionManager.runInSession(transaction.empresa) { session ->
             try {
                 baixaAdiantamentoNaSessao(session, transaction, pagamento)
             } catch (error: Throwable) {
@@ -47,7 +47,8 @@ class AdiantamentoService(
     ): Int? {
         val empresa = empresaProperties.getEmpresaOrThrow(transaction.empresa)
         val adiantamento = empresa.adiantamento
-        session.changeFilial(empresa)
+        // A filial ja foi garantida pelo pool ao emprestar a sessao (numa sessao dedicada,
+        // sem nem tocar no menu de troca de filial).
         val lancamentoPage = nav.goLacamentoPage(session)
         val clienteCodigo = transaction.clienteCodigo
             ?: throw IllegalArgumentException("Cliente codigo nao informado para o adiantamento ${transaction.id ?: transaction.txId}")
@@ -58,6 +59,7 @@ class AdiantamentoService(
 
         selecionarEmpresaNoFiltro(empresa, lancamentoPage)
 
+        lancamentoPage.waitAjaxLoadingToFinish()
         BrowserRuntime.css("#vFILTRO_CONTAGERENCIAL_IDENTIFICADOR")
             .shouldBe(visible)
             .setValue(adiantamento.contaGerencialIdentificador)

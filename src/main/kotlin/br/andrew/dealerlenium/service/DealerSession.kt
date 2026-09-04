@@ -3,6 +3,7 @@ package br.andrew.dealerlenium.service
 import br.andrew.dealerlenium.DealerCredential
 import br.andrew.dealerlenium.DealerProperties
 import br.andrew.dealerlenium.browser.BrowserRuntime
+import br.andrew.dealerlenium.infrastructure.configurations.Empresa
 import br.andrew.dealerlenium.pages.HomePage
 import br.andrew.dealerlenium.pages.LoginPage
 import br.andrew.dealerlenium.schedule.MainTabSessionExpiryJob
@@ -33,6 +34,10 @@ import java.util.concurrent.TimeUnit
 class DealerSession(
     val id: Int,
     private val credential: DealerCredential,
+    /** Alcance de filiais deste login (dedicado, `all` ou geral). */
+    val escopo: DealerSessionScope,
+    /** Filial em que a sessao fica travada, quando o escopo e dedicado. */
+    private val empresaFixa: Empresa?,
     private val dealerProperties: DealerProperties,
     private val browserFactory: DealerBrowserFactory,
     private val loginPage: LoginPage,
@@ -47,6 +52,14 @@ class DealerSession(
 
     @Volatile
     private var initialized = false
+
+    /**
+     * A filial de uma sessao dedicada e estado de sessao do servidor, entao a aba nova
+     * de cada requisicao deveria abrir ja na filial travada no login. Confere isso na
+     * primeira aba depois de cada login; se a premissa nao valer, passa a conferir
+     * (e corrigir) em toda aba.
+     */
+    private var filialConferidaAposLogin = false
     private var nextSessionExpiryJobRunAt: Instant = Instant.MIN
 
     private var selenideDriver: SelenideDriver? = null
@@ -131,14 +144,70 @@ class DealerSession(
         val driver = browserFactory.createSelenideDriver(handle.webDriver)
         selenideDriver = driver
 
+        filialConferidaAposLogin = false
         BrowserRuntime.withDriver(driver) {
             loginPage.login(credential)
+            travarFilialSeNecessario()
         }
         mainWindowHandle = handle.webDriver.windowHandle
         initialized = true
         nextSessionExpiryJobRunAt = Instant.now().plus(SESSION_EXPIRY_INITIAL_DELAY)
         runSessionExpiryJobOnMainTabIfDue()
         logger.info("Sessao dealer #{} inicializada para credencial '{}'", id, credential.username)
+    }
+
+    /**
+     * Posiciona a sessao dedicada na filial dela logo apos o login, para que as
+     * transacoes daquela filial nao precisem navegar o menu de troca de filial.
+     * O [HomePage.changeFilial] ja verifica o cabecalho antes e nao faz nada quando
+     * a sessao ja esta na filial correta.
+     *
+     * Uma falha aqui nao pode derrubar a sessao (o slot de licenca do login precisa
+     * ser preservado); o pool reposiciona na primeira requisicao.
+     */
+    private fun travarFilialSeNecessario() {
+        val empresa = empresaFixa ?: return
+        runCatching {
+            BrowserRuntime.open(dealerProperties.indexUrl)
+            homePage.waitAjaxLoadingToFinish()
+            homePage.changeFilial(empresa)
+        }.onFailure { error ->
+            logger.error(
+                "Sessao dealer #{} ('{}') nao conseguiu travar na filial {}: {}",
+                id,
+                credential.username,
+                empresa.id,
+                error.message,
+                error,
+            )
+        }.onSuccess {
+            logger.info("Sessao dealer #{} travada na filial {}", id, empresa.id)
+        }
+    }
+
+    /**
+     * Confere, na aba nova, que a sessao dedicada continua na filial dela. Uma
+     * divergencia significa que a filial nao sobreviveu a abertura da aba: corrige na
+     * hora (para a transacao nao rodar na filial errada) e loga alto, mantendo a
+     * conferencia ligada nas proximas abas.
+     */
+    private fun conferirFilialTravada() {
+        val empresa = empresaFixa ?: return
+        if (filialConferidaAposLogin) {
+            return
+        }
+        val filialDaAba = homePage.filialAtual()
+        if (filialDaAba == empresa.id.trim()) {
+            filialConferidaAposLogin = true
+            return
+        }
+        logger.error(
+            "Sessao dealer #{} e dedicada a filial {}, mas a aba abriu em '{}'; corrigindo antes da transacao",
+            id,
+            empresa.id,
+            filialDaAba,
+        )
+        homePage.changeFilial(empresa)
     }
 
     private fun <T> runInSessionTab(action: (HomePage) -> T): T {
@@ -153,6 +222,7 @@ class DealerSession(
                 initialized = false
                 throw DealerSessionExpiredException()
             }
+            conferirFilialTravada()
             action(homePage)
         } finally {
             try {

@@ -25,8 +25,9 @@ class PessoaService(
     private val empresaProperties: EmpresaProperties,
 ) {
 
-    fun getCliente(idCliente: Int): Cliente {
-        return browserSessionManager.runInSession() { homePage ->
+    /** [empresa] roteia a busca para o pool da filial; `null` usa o pool geral. */
+    fun getCliente(idCliente: Int, empresa: String? = null): Cliente {
+        return browserSessionManager.runInSession(empresa) { homePage ->
             nav.goPessoas(homePage)
             BrowserRuntime.css(
                 SelenideElementHelper.selectorByAnyIdContains(
@@ -74,8 +75,8 @@ class PessoaService(
         val valor = request.valor
             ?: throw IllegalArgumentException("Valor do adiantamento deve ser informado")
 
-        val cliente = getCliente(idCliente)
         empresaProperties.getEmpresaOrThrow(empresa)
+        val cliente = getCliente(idCliente, empresa)
         val retorno = uzziPixService.createPixByEmpresa(
             empresa,
             gerarTxId(),

@@ -40,6 +40,9 @@ data class DealerProperties(
      * de modo que o tamanho do pool = numero de credenciais disponiveis.
      * Quando apenas [username]/[password] estao configurados, o pool tem tamanho 1
      * (serializa as requisicoes naturalmente).
+     *
+     * O [DealerCredential.empresa] define o alcance de cada login (dedicado a uma
+     * filial, `all` ou geral); veja [br.andrew.dealerlenium.service.DealerSessionScope].
      */
     fun resolveCredentials(): List<DealerCredential> {
         val configured = credentials
@@ -59,6 +62,13 @@ data class DealerProperties(
 data class DealerCredential(
     @field:NotBlank val username: String = "",
     @field:NotBlank val password: String = "",
+    /**
+     * Filial atendida por este login:
+     * - id da empresa (ex.: `AUTOVEMA_PVH`): pool dedicado, a sessao fica travada nessa filial;
+     * - `all`: o login atende qualquer filial;
+     * - vazio: pool geral, atende todas as filiais exceto as que ja tem pool dedicado.
+     */
+    val empresa: String = "",
 )
 
 enum class FlowStep {
