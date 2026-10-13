@@ -31,6 +31,10 @@ class AdiantamentoService(
 
     fun baixaAdiantamento(transaction: TransactionDocument, pagamento: PixTransactionConsultationResponse): Int? {
         return browserSessionManager.runInSession(transaction.empresa) { session ->
+            logger.info(
+                "Iniciando baixa de adiantamento: transacao={}, filial={}",
+                transaction.id ?: transaction.txId, transaction.empresa,
+            )
             try {
                 baixaAdiantamentoNaSessao(session, transaction, pagamento)
             } catch (error: Throwable) {

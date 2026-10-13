@@ -2,6 +2,7 @@ package br.andrew.dealerlenium.infrastructure
 
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.ConstraintViolationException
+import br.andrew.dealerlenium.service.DealerEtapaException
 import br.andrew.dealerlenium.service.PixProviderRateLimitException
 import org.openqa.selenium.WebDriverException
 import org.springframework.http.HttpHeaders
@@ -108,8 +109,11 @@ class ApiExceptionHandler {
 
     private fun resolveDealerAccessMessage(ex: Throwable): String? {
         val currentChain = generateSequence(ex) { it.cause }
+        val etapa = currentChain.filterIsInstance<DealerEtapaException>().firstOrNull()?.etapa
 
-        return if (currentChain.any { cause ->
+        return if (etapa != null) {
+            "Falha ao obter acesso ao dealernet (etapa: $etapa)"
+        } else if (currentChain.any { cause ->
             cause is WebDriverException || cause.javaClass.name.startsWith("com.codeborne.selenide")
         }) {
             "Falha ao obter acesso ao dealernet"

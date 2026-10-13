@@ -1,5 +1,6 @@
 package br.andrew.dealerlenium.service
 
+import br.andrew.dealerlenium.DealerCredential
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -7,6 +8,21 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DealerSessionRoutingTest {
+
+    @Test
+    fun `autovema waits for general login even when motors login is free`() {
+        val projetos = DealerCredential(username = "PROJETOS1")
+        val motors = DealerCredential(username = "ROV.MITPVH", empresa = "MOTORS_PVH")
+        val escopoDe = { credential: DealerCredential -> DealerSessionScope.of(credential.empresa) }
+        val routing = DealerSessionRouting(listOf(projetos, motors).map(escopoDe))
+
+        for (filial in listOf("AUTOVEMA_PVH", "AUTOVEMA_VHA")) {
+            assertEquals(projetos, routing.escolher(listOf(motors, projetos), escopoDe, filial))
+            assertNull(routing.escolher(listOf(motors), escopoDe, filial))
+            assertTrue(routing.atendida(filial))
+        }
+        assertEquals(motors, routing.escolher(listOf(projetos, motors), escopoDe, "MOTORS_PVH"))
+    }
 
     private val dedicada = DealerSessionScope.Dedicada("AUTOVEMA_PVH")
     private val geral = DealerSessionScope.Geral

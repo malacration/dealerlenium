@@ -97,7 +97,7 @@ class BrowserSessionManager(
                 DealerSessionScope.Todas -> "atende todas as filiais"
                 DealerSessionScope.Geral -> "geral"
             }
-            logger.info("Sessao dealer #{}: {}", sessao.id, descricao)
+            logger.info("Sessao dealer #{}: login='{}', escopo={}", sessao.id, sessao.username, descricao)
         }
         // Nao da para usar o campo [routing]: ele depende de [sessions], que ainda esta sendo criado.
         val roteamento = DealerSessionRouting(sessoes.map { it.escopo })
@@ -169,7 +169,11 @@ class BrowserSessionManager(
     private fun <T> runWithRetry(session: DealerSession, alvo: String?, action: (HomePage) -> T, attempt: Int): T {
         return try {
             session.runInTab { homePage ->
-                garantirFilial(session, alvo, homePage)
+                logger.info(
+                    "Executando operacao dealer: sessao={}, login='{}', escopo={}, filialAlvo={}, tentativa={}",
+                    session.id, session.username, session.escopo, alvo, attempt + 1,
+                )
+                naEtapa("troca de filial") { garantirFilial(session, alvo, homePage) }
                 action(homePage)
             }
         } catch (error: DealerSessionExpiredException) {
@@ -256,6 +260,37 @@ class BrowserSessionManager(
     companion object {
         private const val MAX_RETRIES = 2
         private val SESSION_EXPIRY_RUN_INTERVAL: Duration = Duration.ofSeconds(10)
+    }
+}
+
+/**
+ * Falha da automacao do dealer marcada com a [etapa] em que aconteceu. A mensagem vai
+ * para o front (erro da API e `ultimaFalhaProcessamento` da transacao), entao carrega
+ * a etapa e so a primeira linha do erro original.
+ */
+class DealerEtapaException(val etapa: String, cause: Throwable) : RuntimeException(
+    "Falha durante a $etapa no dealer: ${cause.message?.lineSequence()?.firstOrNull()?.trim().orEmpty().ifBlank { cause::class.simpleName }}",
+    cause,
+)
+
+/**
+ * Executa [action] marcando as falhas com a [etapa]. As excecoes que controlam o retry
+ * do pool passam direto.
+ */
+internal fun <T> naEtapa(etapa: String, action: () -> T): T {
+    return try {
+        action()
+    } catch (error: DealerSessionExpiredException) {
+        throw error
+    } catch (error: StaleDealerReadException) {
+        throw error
+    } catch (error: DealerEtapaException) {
+        throw error
+    } catch (error: IllegalArgumentException) {
+        // Entrada invalida (ex.: filial desconhecida) continua virando 400 na API.
+        throw error
+    } catch (error: Exception) {
+        throw DealerEtapaException(etapa, error)
     }
 }
 

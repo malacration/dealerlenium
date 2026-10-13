@@ -110,6 +110,15 @@ Quando a automacao do navegador falha, a mensagem de erro normalmente e:
 Falha ao obter acesso ao dealernet
 ```
 
+Quando a etapa da falha e conhecida, ela vem junto na mensagem:
+
+```text
+Falha ao obter acesso ao dealernet (etapa: obtencao da sessao)
+```
+
+Etapas possiveis: `obtencao da sessao` (login do navegador no Dealer) e
+`troca de filial`.
+
 ### Exemplo frontend
 
 ```ts

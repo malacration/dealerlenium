@@ -2,6 +2,7 @@ package br.andrew.dealerlenium.service
 
 import br.andrew.dealerlenium.DealerCredential
 import br.andrew.dealerlenium.DealerProperties
+import br.andrew.dealerlenium.browser.BrowserDebugArtifacts
 import br.andrew.dealerlenium.browser.BrowserRuntime
 import br.andrew.dealerlenium.infrastructure.configurations.Empresa
 import br.andrew.dealerlenium.pages.HomePage
@@ -45,6 +46,8 @@ class DealerSession(
     private val mainTabSessionExpiryJob: MainTabSessionExpiryJob,
 ) {
     private val logger = LoggerFactory.getLogger(javaClass)
+
+    val username: String get() = credential.username
 
     private val executor = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "dealer-session-$id-worker").apply { isDaemon = false }
@@ -131,7 +134,9 @@ class DealerSession(
 
     // --- internos (sempre na thread da sessao) ---
 
-    private fun initializeIfNeeded() {
+    private fun initializeIfNeeded() = naEtapa("obtencao da sessao") { obterSessao() }
+
+    private fun obterSessao() {
         if (initialized && isSessionAlive()) {
             runSessionExpiryJobOnMainTabIfDue()
             return
@@ -146,7 +151,14 @@ class DealerSession(
 
         filialConferidaAposLogin = false
         BrowserRuntime.withDriver(driver) {
-            loginPage.login(credential)
+            try {
+                loginPage.login(credential)
+            } catch (error: Throwable) {
+                // O login roda antes da operacao, fora do alcance das capturas dos
+                // services; o navegador so e descartado na proxima inicializacao.
+                BrowserDebugArtifacts.captureCurrentContext("login-sessao-$id-${credential.username}")
+                throw error
+            }
             travarFilialSeNecessario()
         }
         mainWindowHandle = handle.webDriver.windowHandle
