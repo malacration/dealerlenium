@@ -80,6 +80,7 @@ data class EmpresaConfig(
     val chavePix: String? = null,
     val titular: String? = null,
     val adiantamento: AdiantamentoProperties,
+    val codigoDealer: Int? = null,
 ) {
     fun toEmpresa(id: String): Empresa {
         return Empresa(
@@ -90,6 +91,7 @@ data class EmpresaConfig(
             chavePix = chavePix,
             titular = titular,
             adiantamento = adiantamento,
+            codigoDealer = codigoDealer,
         )
     }
 }
@@ -102,6 +104,7 @@ data class Empresa(
     val chavePix: String? = null,
     val titular: String? = null,
     val adiantamento: AdiantamentoProperties,
+    val codigoDealer: Int? = null,
 )
 
 data class BranchOption(

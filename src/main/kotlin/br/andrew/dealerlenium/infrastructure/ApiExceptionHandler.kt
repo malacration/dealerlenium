@@ -8,6 +8,7 @@ import org.openqa.selenium.WebDriverException
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
@@ -20,6 +21,14 @@ import java.time.OffsetDateTime
 @RestControllerAdvice
 class ApiExceptionHandler {
     private val logger = LoggerFactory.getLogger(ApiExceptionHandler::class.java)
+
+    @ExceptionHandler(HttpMessageNotReadableException::class)
+    fun handleUnreadableBody(
+        ex: HttpMessageNotReadableException,
+        request: HttpServletRequest,
+    ): ResponseEntity<ApiErrorResponse> = build(
+        HttpStatus.BAD_REQUEST, "Corpo da requisicao invalido. Confira o JSON e os campos obrigatorios.", request.requestURI, ex,
+    )
 
     @ExceptionHandler(ConstraintViolationException::class)
     fun handleConstraintViolation(

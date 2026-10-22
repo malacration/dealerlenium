@@ -1,6 +1,7 @@
 package br.andrew.dealerlenium.repositorys
 
 import br.andrew.dealerlenium.model.TransactionDocument
+import br.andrew.dealerlenium.model.TipoTransacao
 import org.springframework.data.domain.Pageable
 import org.springframework.data.mongodb.repository.MongoRepository
 import org.springframework.data.mongodb.repository.Query
@@ -9,6 +10,11 @@ import java.time.Instant
 
 @Repository
 interface TransactionRepository : MongoRepository<TransactionDocument, String> {
+    fun findAllByIdLancamentoAndEmpresaAndTipoTransacaoOrderByCreatedAtDesc(
+        idLancamento: Int,
+        empresa: String,
+        tipoTransacao: TipoTransacao,
+    ): List<TransactionDocument>
     fun findAllByStatus(status: String): List<TransactionDocument>
     fun findAllByEmpresaIn(empresas: Collection<String>): List<TransactionDocument>
     fun findAllByStatusAndEmpresaIn(status: String, empresas: Collection<String>): List<TransactionDocument>
