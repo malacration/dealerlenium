@@ -1,4 +1,4 @@
-FROM gradle:8.14.2-jdk21 AS builder
+FROM gradle:9.8.2-jdk25 AS builder
 
 WORKDIR /workspace
 
@@ -10,7 +10,7 @@ COPY tessdata ./tessdata
 
 RUN chmod +x gradlew && ./gradlew bootJar --no-daemon
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 
 WORKDIR /app
 
