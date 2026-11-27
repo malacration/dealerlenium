@@ -23,7 +23,7 @@ class DealerTituloWebServiceTest {
     private val properties = DealerWebServiceProperties(true, "https://dealer.example/ws", "user&name", "secret<password>")
     private val builder = RestClient.builder()
     private val server = MockRestServiceServer.bindTo(builder).build()
-    private val service = DealerTituloWebService(properties, ObjectMapper(), builder)
+    private val service = DealerTituloWebService(properties, ObjectMapper(), builder, false)
 
     @Test
     fun `consulta SOAP envia lancamento documento e parcela como filtros numericos`() {

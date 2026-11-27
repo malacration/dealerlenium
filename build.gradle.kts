@@ -51,9 +51,38 @@ tasks.withType<Test>().configureEach {
     systemProperty("DEALER_TEST_CONTEXT", dealerTestContext)
 }
 
+// Sonda manual do Dealer real (grava HTML em build/probe): fora do `test` padrao, salvo com
+// -PdealerProbe (ou DEALER_PROBE=true). Tambem roda isolada em `dealerProbeTest`.
+val dealerProbe = providers.gradleProperty("dealerProbe")
+    .orElse(providers.environmentVariable("DEALER_PROBE"))
+    .map { it.isBlank() || it.toBoolean() }
+    .getOrElse(false)
+
+tasks.named<Test>("test") {
+    useJUnitPlatform {
+        if (!dealerProbe) excludeTags("dealer-probe")
+        // Integracao com o Dealer real (perfil dealer-e2e-pipeline, yml fora do git): so nas tasks proprias.
+        excludeTags("dealer-pessoa-lookup", "dealer-adiantamento-pipeline")
+    }
+}
+
+tasks.register<Test>("dealerProbeTest") {
+    description = "Executa a sonda manual (dealer-probe) contra o Dealer real."
+    group = "verification"
+    // Test task extra nao herda as classes/classpath do source set de teste.
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform {
+        includeTags("dealer-probe")
+    }
+    shouldRunAfter(tasks.test)
+}
+
 tasks.register<Test>("dealerAdiantamentoPipelineTest") {
     description = "Executa o teste de pipeline da baixa de adiantamento usando o Dealer real."
     group = "verification"
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
     useJUnitPlatform {
         includeTags("dealer-adiantamento-pipeline")
     }
@@ -63,6 +92,8 @@ tasks.register<Test>("dealerAdiantamentoPipelineTest") {
 tasks.register<Test>("dealerPessoaLookupIntegrationTest") {
     description = "Executa o teste de integracao de busca de pessoa no Dealer real."
     group = "verification"
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
     useJUnitPlatform {
         includeTags("dealer-pessoa-lookup")
     }
