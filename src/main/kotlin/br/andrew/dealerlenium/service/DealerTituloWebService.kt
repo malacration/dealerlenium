@@ -4,7 +4,10 @@ import br.andrew.dealerlenium.infrastructure.configurations.DealerWebServiceProp
 import br.andrew.dealerlenium.model.ClienteSelecao
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.HttpStatus
+import org.springframework.http.client.ClientHttpRequestFactory
+import org.springframework.http.client.JdkClientHttpRequestFactory
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Service
 import org.springframework.web.client.RestClient
@@ -14,6 +17,7 @@ import org.w3c.dom.Element
 import org.w3c.dom.Document
 import java.io.StringReader
 import java.io.StringWriter
+import java.net.http.HttpClient
 import java.time.LocalDate
 import javax.xml.XMLConstants
 import javax.xml.parsers.DocumentBuilderFactory
@@ -23,12 +27,19 @@ import org.xml.sax.SAXParseException
 import org.xml.sax.helpers.DefaultHandler
 
 @Service
-class DealerTituloWebService(
+class DealerTituloWebService internal constructor(
     private val properties: DealerWebServiceProperties,
     private val mapper: ObjectMapper,
     builder: RestClient.Builder,
+    aplicarPrazos: Boolean,
 ) {
-    private val client = builder.build()
+    /** Com os prazos de dealer.web-service (connect/read timeout). */
+    @Autowired
+    constructor(properties: DealerWebServiceProperties, mapper: ObjectMapper, builder: RestClient.Builder) :
+        this(properties, mapper, builder, true)
+
+    // aplicarPrazos = false so em teste com MockRestServiceServer, que troca a request factory do builder.
+    private val client = (if (aplicarPrazos) builder.requestFactory(requestFactory(properties)) else builder).build()
     private val diagnostics = DealerWebServiceDiagnostics(properties)
 
     fun consultar(
@@ -53,6 +64,11 @@ class DealerTituloWebService(
         tituloParcela?.let { filtros["Titulo_Parcela"] = it }
         pessoaDocumento?.let { filtros["Pessoa_DocIdentificador"] = it }
         pessoaCodigo?.let { filtros["Titulo_PessoaCod"] = it }
+        return consultarFiltros(filtros)
+    }
+
+    /** Metodo TITULO em modo consulta com os filtros informados (contas a pagar usa movimento P). */
+    fun consultarFiltros(filtros: Map<String, Any>): List<JsonNode> {
         return parse(request("TITULO", linkedMapOf(
             "Modo" to "CON", "Usuario" to properties.username, "Senha" to properties.password,
             "Json_dadosfiltro" to mapper.writeValueAsString(filtros), "Json_titulos" to "[]",
@@ -215,5 +231,12 @@ class DealerTituloWebService(
 
     companion object {
         private const val SOAP_NAMESPACE = "http://schemas.xmlsoap.org/soap/envelope/"
+
+        internal fun requestFactory(properties: DealerWebServiceProperties): ClientHttpRequestFactory {
+            require(!properties.connectTimeout.isNegative && !properties.connectTimeout.isZero) { "dealer.web-service.connect-timeout deve ser positivo" }
+            require(!properties.readTimeout.isNegative && !properties.readTimeout.isZero) { "dealer.web-service.read-timeout deve ser positivo" }
+            val http = HttpClient.newBuilder().connectTimeout(properties.connectTimeout).build()
+            return JdkClientHttpRequestFactory(http).apply { setReadTimeout(properties.readTimeout) }
+        }
     }
 }

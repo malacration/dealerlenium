@@ -57,6 +57,9 @@ class SecurityConfig(
                     .requestMatchers("/api/debug/**").hasAnyAuthority("DEBUG", "ADMIN")
                     .requestMatchers(HttpMethod.POST, "/api/transactions/*/retry-settlement").hasAuthority("ADMIN")
                     .requestMatchers(HttpMethod.POST, "/pix/share/verify").permitAll()
+                    // Integracao (service account): mesma role que o sap-rovema exige do Nota Agil. A authority so
+                    // existe para azp em keycloak.integracao-client-ids (ver KeycloakJwtRolesConverter).
+                    .requestMatchers("/api/contas-pagar/**").hasAuthority(KeycloakJwtRolesConverter.INTEGRACAO_CONTAS_PAGAR)
                     .anyRequest().authenticated()
             }
             .oauth2ResourceServer { oauth2 ->
